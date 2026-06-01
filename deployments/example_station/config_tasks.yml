@@ -1,0 +1,74 @@
+# Task Configuration: Defines available tasks for data collection
+
+tasks:
+  - id: b06d85e1-c053-49db-acbb-685fc64ddf8a
+    name: Pick and place
+    description: Place the red box in the goal area, then return it to the start position.
+    version: v0.1
+    language_instructions:
+      - Pick up the red box and place it in the goal area, then return it to the start position
+    metadata:
+      difficulty: beginner
+      required_objects:
+        - red_box
+      success_criteria: box_placed_and_returned
+      estimated_duration_sec: 45
+
+  - id: b8aab1a7-97ea-4391-8a7d-4286d436d5a1
+    name: Plug and unplug
+    description: Plug the USB cable into the laptop port, then unplug it.
+    version: v0.1
+    language_instructions:
+      - Insert the USB cable into the laptop port, then remove it
+    metadata:
+      difficulty: intermediate
+      required_objects:
+        - usb_cable
+        - laptop
+      success_criteria: cable_inserted_and_removed
+      estimated_duration_sec: 30
+
+  - id: edf39193-82d3-4391-8157-1b85dbfe5db5
+    name: Screw a lid
+    description: Screw the lid onto the jar tightly, then unscrew it completely.
+    version: v0.1
+    language_instructions:
+      - Screw the lid onto the jar tightly, then unscrew it completely
+    metadata:
+      difficulty: intermediate
+      required_objects:
+        - jar
+        - lid
+      success_criteria: lid_screwed_and_unscrewed
+      estimated_duration_sec: 25
+
+  - id: 92e0eb88-393f-4e90-b02b-0a71814dc170
+    name: NIST board 1 - Gears
+    description: Mount both gears onto the posts of NIST board 1, then unmount them.
+    version: v0.1
+    language_instructions:
+      - Mount both gears onto the NIST board posts, then unmount them
+    metadata:
+      difficulty: advanced
+      required_objects:
+        - nist_board
+        - gear_small
+        - gear_large
+      success_criteria: gears_mounted_and_unmounted
+      estimated_duration_sec: 60
+
+  - id: 39bfc720-bf67-4447-ae21-36ed42856838
+    name: Tower of Babel
+    description: Stack the rings from largest to smallest on the tower base, then topple the tower.
+    version: v0.1
+    language_instructions:
+      - Stack the rings from largest to smallest on the tower base, then topple it
+    metadata:
+      difficulty: advanced
+      required_objects:
+        - ring_large
+        - ring_medium
+        - ring_small
+        - tower_base
+      success_criteria: tower_built_and_toppled
+      estimated_duration_sec: 50

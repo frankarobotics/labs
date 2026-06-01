@@ -1,0 +1,183 @@
+"""Centralized FastAPI dependency providers for services and state machine."""
+
+from __future__ import annotations
+
+from functools import lru_cache
+
+from fastapi import Depends
+from fastapi.security import HTTPBearer
+from loguru import logger
+from sqlalchemy.orm import Session
+
+from configs.data_collection import DataCollectionConfig, load_data_collection_config
+from configs.data_recorder import DataRecorderConfig, load_data_recorder_config
+from configs.station import StationConfig, load_station_config
+from configs.tasks import TasksConfig, load_tasks_config
+from db import get_db
+from repos.data_recorder import DataRecorderRepo
+from repos.devices import DeviceRepo
+from repos.episode_metadata import EpisodeMetadataRepo
+from repos.episodes import EpisodeRepo
+from repos.tasks import TaskRepo
+from services.device import DeviceService
+from services.episode import EpisodeService
+from services.franka_robot import FrankaRobotService
+from services.recording import RecordingService
+from services.system import SystemService
+from services.task import TaskService
+from services.teleop import TeleopService
+from state_machine.franka_workflow import FrankaWorkflowStateMachine
+from state_machine.recording import RecordingStateMachine
+
+# Global singleton instances
+_robot_service_instance: FrankaRobotService | None = None
+_workflow_state_machine_instance: FrankaWorkflowStateMachine | None = None
+_recording_state_machine_instance: RecordingStateMachine | None = None
+_teleop_service_instance: TeleopService | None = None
+
+# Security
+security = HTTPBearer()
+
+
+def get_data_collection_config() -> DataCollectionConfig:
+    """Get the data collection configuration instance."""
+    return load_data_collection_config()
+
+
+@lru_cache
+def get_tasks_config() -> TasksConfig:
+    """Get the tasks configuration instance.
+
+    Cached to avoid repeated file reads and parsing.
+    """
+    return load_tasks_config()
+
+
+def get_data_recorder_repo() -> DataRecorderRepo:
+    """Get the data recorder repository instance."""
+    config: DataRecorderConfig = load_data_recorder_config()
+    return DataRecorderRepo(config)
+
+
+def get_episode_repo(db: Session = Depends(get_db)) -> EpisodeRepo:
+    """Get the episode repository instance."""
+    return EpisodeRepo(db)
+
+
+def get_task_repo(tasks_config: TasksConfig = Depends(get_tasks_config)) -> TaskRepo:
+    """Get the task repository instance."""
+    return TaskRepo(tasks_config)
+
+
+def get_device_repo(db: Session = Depends(get_db)) -> DeviceRepo:
+    """Get the device repository instance."""
+    return DeviceRepo(db)
+
+
+def get_episode_metadata_repo() -> EpisodeMetadataRepo:
+    """Get the episode metadata repository instance."""
+    return EpisodeMetadataRepo("/workspace/data/raw_episodes/")
+
+
+def get_robot_service() -> FrankaRobotService:
+    """Get the robot service singleton instance."""
+    global _robot_service_instance  # noqa: PLW0603
+    if _robot_service_instance is None:
+        station_config: StationConfig = load_station_config()
+        _robot_service_instance = FrankaRobotService(station_config)
+        logger.info("Initialized FrankaRobotService")
+    return _robot_service_instance
+
+
+def get_workflow_state_machine(
+    robot_service: FrankaRobotService = Depends(get_robot_service),
+) -> FrankaWorkflowStateMachine:
+    """Get the state machine instance."""
+    global _workflow_state_machine_instance  # noqa: PLW0603
+    if _workflow_state_machine_instance is None:
+        _workflow_state_machine_instance = FrankaWorkflowStateMachine(robot_service)
+        logger.info("Initialized FrankaWorkflowStateMachine")
+    return _workflow_state_machine_instance
+
+
+def get_teleop_service(
+    state_machine: FrankaWorkflowStateMachine = Depends(get_workflow_state_machine),
+    robot_service: FrankaRobotService = Depends(get_robot_service),
+) -> TeleopService:
+    """Get the teleop service instance."""
+    global _teleop_service_instance  # noqa: PLW0603
+    if _teleop_service_instance is None:
+        station_config: StationConfig = load_station_config()
+        _teleop_service_instance = TeleopService(station_config, state_machine, robot_service)
+        logger.info("Initialized TeleopService")
+    return _teleop_service_instance
+
+
+def get_episode_service(
+    data_recorder_repo: DataRecorderRepo = Depends(get_data_recorder_repo),
+    episode_repo: EpisodeRepo = Depends(get_episode_repo),
+    episode_metadata_repo: EpisodeMetadataRepo = Depends(get_episode_metadata_repo),
+    task_repo: TaskRepo = Depends(get_task_repo),
+    device_repo: DeviceRepo = Depends(get_device_repo),
+) -> EpisodeService:
+    """Get the episode service instance."""
+    station_config: StationConfig = load_station_config()
+    return EpisodeService(
+        data_recorder_repo,
+        episode_repo,
+        episode_metadata_repo,
+        task_repo,
+        device_repo,
+        station_config,
+    )
+
+
+def get_recording_state_machine(
+    episode_service: EpisodeService = Depends(get_episode_service),
+    data_recorder_repo: DataRecorderRepo = Depends(get_data_recorder_repo),
+) -> RecordingStateMachine:
+    """Get the state machine instance."""
+    global _recording_state_machine_instance  # noqa: PLW0603
+    if _recording_state_machine_instance is None:
+        _recording_state_machine_instance = RecordingStateMachine(episode_service, data_recorder_repo)
+        logger.info("Initialized RecordingStateMachine")
+    return _recording_state_machine_instance
+
+
+def get_recording_service(
+    state_machine: RecordingStateMachine = Depends(get_recording_state_machine),
+    data_recorder_repo: DataRecorderRepo = Depends(get_data_recorder_repo),
+    teleop_service: TeleopService = Depends(get_teleop_service),
+) -> RecordingService:
+    """Get the recording service instance."""
+    return RecordingService(
+        state_machine,
+        data_recorder_repo,
+        teleop_service,
+    )
+
+
+def get_device_service(
+    device_repo: DeviceRepo = Depends(get_device_repo),
+    config: DataCollectionConfig = Depends(get_data_collection_config),
+) -> DeviceService:
+    """Get the device service instance."""
+    return DeviceService(device_repo, config)
+
+
+def get_task_service(
+    task_repo: TaskRepo = Depends(get_task_repo),
+    config: DataCollectionConfig = Depends(get_data_collection_config),
+) -> TaskService:
+    """Get the task service instance."""
+    return TaskService(task_repo, config)
+
+
+def get_system_service(
+    recording_sm: RecordingStateMachine = Depends(get_recording_state_machine),
+    workflow_sm: FrankaWorkflowStateMachine = Depends(get_workflow_state_machine),
+    episode_repo: EpisodeRepo = Depends(get_episode_repo),
+) -> SystemService:
+    """Get the system service instance."""
+    station_config: StationConfig = load_station_config()
+    return SystemService(recording_sm, workflow_sm, episode_repo, station_config)

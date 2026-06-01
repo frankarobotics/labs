@@ -1,0 +1,5 @@
+data_collection:
+  url: "0.0.0.0:3001"
+
+data_recorder:
+  url: "http://localhost:3002"

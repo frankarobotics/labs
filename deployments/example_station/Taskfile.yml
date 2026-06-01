@@ -1,0 +1,97 @@
+version: '3'
+
+vars:
+  # Service image names for building — must match directory names under services/.
+  # Note: compose service names in docker-compose.yml may differ
+  # (e.g. realsense-camera-wrist, zed-camera-head) and are used for logs/exec.
+  SERVICES:
+    - controller-coordinator
+    - data-collection
+    - data-collection-ui
+    - data-processor
+    - data-recorder
+    - franka-gello
+    - franka-robot
+    - migrate
+    - realsense-camera
+    - robotiq-gripper
+    - zed-camera
+
+tasks:
+  _cache-deps:
+    # Cache build dependencies for air-gapped deployments
+    cmds:
+      - |
+        docker pull postgres:18rc1 || true &
+        docker pull caddy:2.9-alpine || true &
+        docker pull ubuntu:24.04 || true &
+        docker pull node:22 || true &
+        docker pull golang:1.25 || true &
+        docker pull debian:bookworm-slim || true &
+        docker pull ros:humble-ros-base || true &
+        docker pull ros:jazzy-ros-base || true &
+        docker pull stereolabs/zed:5.0-devel-cuda12.8-ubuntu24.04 || true &
+        wait
+
+  build:
+    desc: "Build all docker images (default: dev, set BUILD_TARGET=prod for production)"
+    deps: [_cache-deps]
+    cmds:
+      - for: {var: SERVICES}
+        cmd: task -d ../../ build SERVICE={{.ITEM}} BUILD_TARGET=${BUILD_TARGET:-dev} NO_CACHE=${NO_CACHE:-0}
+
+  start:
+    desc: Start the services with tilt
+    cmds:
+      - xhost +
+      - tilt up --port 10360 --host 0.0.0.0
+
+  stop:
+    desc: Stop the services with tilt
+    cmds:
+      - tilt down
+
+  restart:
+    desc: Restart the services with tilt
+    cmds:
+      - task stop
+      - task start
+
+  build-prod:
+    desc: Build all docker images for production
+    cmds:
+      - BUILD_TARGET=prod task build
+
+  start-prod:
+    desc: Start production services with docker compose
+    cmds:
+      - docker compose up -d
+
+  stop-prod:
+    desc: Stop production services
+    cmds:
+      - docker compose down
+
+  restart-prod:
+    desc: Restart production services
+    cmds:
+      - task stop-prod
+      - task start-prod
+
+  logs:
+    desc: "Show container logs (usage: task logs [SERVICE=name])"
+    cmds:
+      - |
+        if [[ -n "{{.SERVICE}}" ]]; then
+          docker compose logs -f {{.SERVICE}}
+        else
+          docker compose logs -f
+        fi
+
+  exec:
+    desc: "Exec into a container (usage: task exec SERVICE=name)"
+    preconditions:
+      - sh: '[ -n "{{.SERVICE}}" ]'
+        msg: "SERVICE is required. Usage: task exec SERVICE=name"
+    cmds:
+      - docker compose exec {{.SERVICE}} bash

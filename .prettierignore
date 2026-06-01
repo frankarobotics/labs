@@ -1,0 +1,15 @@
+# Common generated folders
+node_modules/
+dist/
+build/
+.ruff_cache/
+.venv/
+__pycache__/
+tmp/
+
+# Ignore third-party code directories
+third_party/
+
+# Custom
+.github/chatmodes/*.chatmode.md
+services/pipeline/data-collection-ui/

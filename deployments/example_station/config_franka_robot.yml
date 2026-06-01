@@ -1,0 +1,155 @@
+LEFT:
+  namespace: "left"
+  robot_ip: "xxx.xxx.xxx.xxx"
+  arm_id: "fr3"
+  mock_hardware: false
+  load_gripper: false
+
+  controller_names:
+    - gravity_compensation_controller
+    - joint_follower_controller
+
+  target_topic_name: "follower/gello/joint_states"
+
+  activate_controller: false  # Spawn controllers as inactive, let coordinator manage activation
+  sync_after_activation: true  # Sync to target position when joint_follower_controller activates
+
+  k_alpha: 0.99
+  k_gains:
+    - 240.0
+    - 240.0
+    - 240.0
+    - 240.0
+    - 100.0
+    - 60.0
+    - 20.0
+
+  d_gains:
+    - 20.0
+    - 20.0
+    - 20.0
+    - 10.0
+    - 10.0
+    - 10.0
+    - 5.0
+
+  reset_position:
+    - 0.0
+    - -0.7853981633974483  # -pi/4
+    - 0.0
+    - -2.356194490192345   # -3*pi/4
+    - 0.0
+    - 1.5707963267948966   # pi/2
+    - 0.7853981633974483   # pi/4
+
+  upper_torque_thresholds_acceleration:
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+
+  upper_torque_thresholds_nominal:
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+
+  upper_force_thresholds_acceleration:
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+
+  upper_force_thresholds_nominal:
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+
+RIGHT:
+  namespace: "right"
+  robot_ip: "xxx.xxx.xxx.xxx"
+  arm_id: "fr3"
+  mock_hardware: false
+  load_gripper: false
+
+  controller_names:
+    - gravity_compensation_controller
+    - joint_follower_controller
+
+  target_topic_name: "follower/gello/joint_states"
+
+  activate_controller: false  # Spawn controllers as inactive, let coordinator manage activation
+  sync_after_activation: true  # Sync to target position when joint_follower_controller activates
+
+  k_alpha: 0.99
+  k_gains:
+    - 240.0
+    - 240.0
+    - 240.0
+    - 240.0
+    - 100.0
+    - 60.0
+    - 20.0
+
+  d_gains:
+    - 20.0
+    - 20.0
+    - 20.0
+    - 10.0
+    - 10.0
+    - 10.0
+    - 5.0
+
+  reset_position:
+    - 0.0
+    - -0.7853981633974483  # -pi/4
+    - 0.0
+    - -2.356194490192345   # -3*pi/4
+    - 0.0
+    - 1.5707963267948966   # pi/2
+    - 0.7853981633974483   # pi/4
+
+  upper_torque_thresholds_acceleration:
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+
+  upper_torque_thresholds_nominal:
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+
+  upper_force_thresholds_acceleration:
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+
+  upper_force_thresholds_nominal:
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0
+    - 40.0

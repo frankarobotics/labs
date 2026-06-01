@@ -1,0 +1,19 @@
+services:
+  data-processor:
+    image: ${DOCKER_REGISTRY:-registry.localhost}/labs/data-processor:${DOCKER_TAG:-latest}
+    build:
+      context: .
+      dockerfile: data-processor.dockerfile
+      target: ${BUILD_TARGET:-dev}
+      args:
+        BUILD_TARGET: ${BUILD_TARGET:-dev}
+        BUILD_CREATED: ${BUILD_CREATED:-}
+        BUILD_VERSION: ${BUILD_VERSION:-}
+        GIT_COMMIT: ${GIT_COMMIT:-}
+    container_name: data-processor
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ${DATA_ROOT:-../../../data}:/workspace/data
+    environment:
+      DISPLAY: ${DISPLAY}

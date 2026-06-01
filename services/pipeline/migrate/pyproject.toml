@@ -1,0 +1,12 @@
+[project]
+name = "migrate"
+version = "0.1.0"
+description = "Migrate service"
+readme = "README.md"
+license = "Apache-2.0"
+
+[tool.sqlfluff.core]
+verbose = 1
+dialect = "postgres"
+large_file_skip_byte_limit = 50000
+max_line_length = 600

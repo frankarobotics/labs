@@ -1,0 +1,78 @@
+define: &common_camera_parameters
+  general:
+      # Resolution options:
+      # HD2K 2208*1242, available framerates: 15 fps
+      # HD1080 1920*1080, available framerates: 15, 30 fps
+      # HD720 1280*720, available framerates: 15, 30, 60 fps
+      # VGA 672*376, available framerates: 15, 30, 60, 100 fps
+      # if pub resolution 'NATIVE' above resolutions are used
+      # if pub resolution 'CUSTOM' you can downscale the resolution by a factor using the 'pub_downscale_factor' parameter
+      pub_resolution: NATIVE
+      grab_resolution: HD720
+      pub_frame_rate: 30.0
+  video:
+      # [DYNAMIC] Image brightness. Range: 0-8
+      brightness: 4
+      # [DYNAMIC] Image contrast. Range: 0-8
+      contrast: 4
+      # [DYNAMIC] Image hue. Range: 0-11
+      hue: 0
+      # [DYNAMIC] Image saturation. Range: 0-8
+      saturation: 4
+      # [DYNAMIC] Image sharpness. Range: 0-8
+      sharpness: 4
+      # [DYNAMIC] Image gamma. Range: 1-9
+      gamma: 8
+      # [DYNAMIC] Enable automatic exposure and gain control
+      auto_exposure_gain: true
+      # [DYNAMIC] Manual exposure value (used if auto_exposure_gain is false). Range: 0-100
+      exposure: 80
+      # [DYNAMIC] Manual gain value (used if auto_exposure_gain is false). Range: 0-100
+      gain: 80
+      # [DYNAMIC] Enable automatic white balance
+      auto_whitebalance: true
+      # [DYNAMIC] Manual white balance temperature x100 (used if auto_whitebalance is false). Range: 2800-6500
+      whitebalance_temperature: 42
+      # Keep RGB image (rgb/image_rect_color)
+      publish_rgb: true
+      # Enable left/right images (left/image_rect_color, right/image_rect_color)
+      publish_left_right: true
+      # Disable unused image topics
+      publish_raw: false
+      publish_gray: false
+      publish_stereo: false
+  depth:
+      # 'NONE' disables depth computation entirely, saving significant bandwidth and GPU
+      depth_mode: 'NONE'
+      publish_depth_map: false
+      publish_point_cloud: false
+      publish_depth_info: false
+      publish_depth_confidence: false
+      publish_disparity: false
+  pos_tracking:
+      pos_tracking_enabled: false
+      publish_tf: false
+      publish_map_tf: false
+  sensors:
+      sensors_pub_rate: 1.0
+      publish_imu: false
+      publish_imu_tf: false
+      publish_imu_raw: false
+      publish_cam_imu_transf: false
+      publish_mag: false
+      publish_baro: false
+      publish_temp: false
+  mapping:
+      mapping_enabled: false
+  region_of_interest:
+      publish_roi_mask: false
+
+zed-cameras:
+  - ros2_launch_args:
+      camera_name: head_camera
+      # Serial number is optional, but helpful if multiple cameras from the same model are being used
+      # serial_number: 'xxxxxxxx'
+      # Specifiying a camera model is required
+      # Options: ['zed', 'zedm', 'zed2', 'zed2i', 'zedx', 'zedxm', 'virtual', 'zedxonegs', 'zedxone4k']
+      camera_model: zedm
+    <<: *common_camera_parameters

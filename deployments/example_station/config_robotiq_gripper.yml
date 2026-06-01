@@ -1,0 +1,8 @@
+# You can find the port by running `ls /dev/serial/by-id/` in the terminal.
+LEFT:
+  com_port: '/dev/serial/by-id/usb-FTDI_USB_TO_RS-485_xxxxxxxx-if00-port0'
+  namespace: 'left/follower/gripper'
+
+RIGHT:
+  com_port: '/dev/serial/by-id/usb-FTDI_USB_TO_RS-485_xxxxxxxx-if00-port0'
+  namespace: 'right/follower/gripper'

@@ -1,0 +1,21 @@
+DROP INDEX IF EXISTS idx_episodes_shipped;
+
+DROP INDEX IF EXISTS idx_episodes_processed;
+
+DROP INDEX IF EXISTS idx_episodes_label;
+
+DROP INDEX IF EXISTS idx_episodes_status;
+
+DROP INDEX IF EXISTS idx_episodes_station_id;
+
+DROP INDEX IF EXISTS idx_episodes_task_id;
+
+DROP TABLE IF EXISTS episodes;
+
+DROP TYPE IF EXISTS EPISODE_SHIPPED;
+
+DROP TYPE IF EXISTS EPISODE_PROCESSED;
+
+DROP TYPE IF EXISTS EPISODE_LABEL;
+
+DROP TYPE IF EXISTS EPISODE_STATUS;

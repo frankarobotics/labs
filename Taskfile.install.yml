@@ -1,0 +1,222 @@
+version: '3'
+
+vars:
+  GO_VERSION: 1.25.0
+  JQ_VERSION: 1.8.0
+  NODE_VERSION: 24
+  RUFF_VERSION: 0.12.1
+  SHFMT_VERSION: v3.12.0
+  TILT_VERSION: 0.35.0
+  UV_VERSION: 0.8.22
+  YQ_VERSION: 4.45.4
+
+tasks:
+  go:
+    desc: Install Go
+    dir: /tmp/temp
+    cmds:
+      - |
+        # Check if already installed with correct version
+        if command -v go &> /dev/null; then
+          INSTALLED_VERSION=$(go version 2>&1 | grep -oP '{{.GO_VERSION}}' || echo "")
+          if [[ "$INSTALLED_VERSION" == "{{.GO_VERSION}}" ]]; then
+            echo "go {{.GO_VERSION}} already installed"
+            exit 0
+          fi
+        fi
+
+        # Install
+        rm -rf /tmp/temp/*
+        if [[ "$CI" == 1 ]];then
+          echo ""
+        else
+          mkdir -p ~/.local/bin
+          wget https://go.dev/dl/go{{.GO_VERSION}}.linux-amd64.tar.gz
+          tar -C ~/.local -xzf go{{.GO_VERSION}}.linux-amd64.tar.gz
+          echo 'export PATH=$PATH:~/.local/go/bin' >> ~/.bashrc
+          echo "Go version: $(~/.local/go/bin/go version)"
+        fi
+
+  jq:
+    desc: Install jq
+    dir: /tmp/temp
+    cmds:
+      - |
+        # Check if already installed with correct version
+        if command -v jq &> /dev/null; then
+          INSTALLED_VERSION=$(jq --version 2>&1 | grep -oP '{{.JQ_VERSION}}' || echo "")
+          if [[ "$INSTALLED_VERSION" == "{{.JQ_VERSION}}" ]]; then
+            echo "jq {{.JQ_VERSION}} already installed"
+            exit 0
+          fi
+        fi
+
+        # Install
+        rm -rf /tmp/temp/*
+        if [[ "$CI" == 1 ]];then
+          echo ""
+        else
+          mkdir -p ~/.local/bin
+          wget https://github.com/jqlang/jq/releases/download/jq-{{.JQ_VERSION}}/jq-linux-amd64 -O ~/.local/bin/jq
+          chmod +x ~/.local/bin/jq
+        fi
+
+  nodejs:
+    desc: Install nodejs
+    dir: /tmp/temp
+    cmds:
+      - |
+        # Check if already installed with correct version
+        if command -v node &> /dev/null; then
+          INSTALLED_VERSION=$(node --version 2>&1 | grep -oP 'v{{.NODE_VERSION}}' || echo "")
+          if [[ "$INSTALLED_VERSION" == "v{{.NODE_VERSION}}" ]]; then
+            echo "nodejs v{{.NODE_VERSION}} already installed"
+            exit 0
+          fi
+        fi
+
+        # Install
+        rm -rf /tmp/temp/*
+        if [[ "$CI" == 1 ]];then
+          curl -fsSL https://deb.nodesource.com/setup_{{.NODE_VERSION}}.x | bash
+          apt-get install -y nodejs
+          command -v npx >/dev/null 2>&1 || npm install -g npx
+          echo "node: $(node --version)"
+          echo "npm: $(node --version)"
+          echo "npx: $(node --version)"
+        else
+          curl -fsSL https://deb.nodesource.com/setup_{{.NODE_VERSION}}.x | sudo bash
+          sudo apt-get install -y nodejs
+          sudo command -v npx >/dev/null 2>&1 || sudo npm install --force -g npx
+          echo "node: $(node --version)"
+          echo "npm: $(node --version)"
+          echo "npx: $(node --version)"
+        fi
+
+  ruff:
+    desc: Install ruff
+    dir: /tmp/temp
+    cmds:
+      - |
+        # Check if already installed with correct version
+        if command -v ruff &> /dev/null; then
+          INSTALLED_VERSION=$(ruff --version 2>&1 | grep -oP '{{.RUFF_VERSION}}' || echo "")
+          if [[ "$INSTALLED_VERSION" == "{{.RUFF_VERSION}}" ]]; then
+            echo "ruff {{.RUFF_VERSION}} already installed"
+            exit 0
+          fi
+        fi
+
+        # Install
+        uv tool install ruff@{{.RUFF_VERSION}}
+
+  shfmt:
+    desc: Install shfmt
+    dir: /tmp/temp
+    cmds:
+      - |
+        # Check if already installed with correct version
+        if command -v shfmt &> /dev/null; then
+          INSTALLED_VERSION=$(shfmt --version 2>&1 | grep -oP '{{.SHFMT_VERSION}}' || echo "")
+          if [[ "$INSTALLED_VERSION" == "{{.SHFMT_VERSION}}" ]]; then
+            echo "shfmt {{.SHFMT_VERSION}} already installed"
+            exit 0
+          fi
+        fi
+
+        # Install
+        rm -rf /tmp/temp/*
+        if [[ "$CI" == 1 ]];then
+          wget -nv -O shfmt https://github.com/mvdan/sh/releases/download/{{.SHFMT_VERSION}}/shfmt_{{.SHFMT_VERSION}}_linux_amd64
+          chmod +x shfmt
+          mv -v shfmt /usr/local/bin
+        else
+          wget -nv -O shfmt https://github.com/mvdan/sh/releases/download/{{.SHFMT_VERSION}}/shfmt_{{.SHFMT_VERSION}}_linux_amd64
+          chmod +x shfmt
+          mkdir -p ~/.local/bin
+          mv -v shfmt ~/.local/bin
+        fi
+
+  tilt:
+    desc: Install tilt
+    dir: /tmp/temp
+    cmds:
+      - |
+        # Check if already installed with correct version
+        if command -v tilt &> /dev/null; then
+          INSTALLED_VERSION=$(tilt version 2>&1 | grep -oP '{{.TILT_VERSION}}' || echo "")
+          if [[ "$INSTALLED_VERSION" == "{{.TILT_VERSION}}" ]]; then
+            echo "tilt {{.TILT_VERSION}} already installed"
+            exit 0
+          fi
+        fi
+
+        # Install
+        rm -rf /tmp/temp/*
+        if [[ "$CI" == 1 ]];then
+          echo ""
+          exit 0
+        else
+          mkdir -p ~/.local/bin
+          curl -fsSL https://github.com/tilt-dev/tilt/releases/download/v{{.TILT_VERSION}}/tilt.{{.TILT_VERSION}}.linux.x86_64.tar.gz | tar -xzv tilt
+          mv tilt ~/.local/bin/tilt
+          chmod +x ~/.local/bin/tilt
+        fi
+
+  uv:
+    desc: Install uv
+    cmds:
+      - |
+        # Check if already installed with correct version
+        if command -v uv &> /dev/null; then
+          INSTALLED_VERSION=$(uv --version 2>&1 | grep -oP '{{.UV_VERSION}}' || echo "")
+          if [[ "$INSTALLED_VERSION" == "{{.UV_VERSION}}" ]]; then
+            echo "uv {{.UV_VERSION}} already installed"
+            exit 0
+          fi
+        fi
+
+        # Install
+        if [[ "$CI" == 1 ]];then
+          curl -LsSf https://astral.sh/uv/{{.UV_VERSION}}/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
+        else
+          curl -LsSf https://astral.sh/uv/{{.UV_VERSION}}/install.sh | sh
+          echo 'eval "$(uv generate-shell-completion bash)"' >> ~/.bashrc
+          echo 'eval "$(uvx --generate-shell-completion bash)"' >> ~/.bashrc
+        fi
+
+  yq:
+    desc: Install yq
+    cmds:
+      - |
+        # Check if already installed with correct version
+        if command -v yq &> /dev/null; then
+          INSTALLED_VERSION=$(yq --version 2>&1 | grep -oP '{{.YQ_VERSION}}' || echo "")
+          if [[ "$INSTALLED_VERSION" == "{{.YQ_VERSION}}" ]]; then
+            echo "yq {{.YQ_VERSION}} already installed"
+            exit 0
+          fi
+        fi
+
+        # Install
+        if [[ "$CI" == 1 ]];then
+          curl -LO https://github.com/mikefarah/yq/releases/download/v{{.YQ_VERSION}}/yq_linux_amd64
+          chmod +x yq_linux_amd64
+          mv yq_linux_amd64 /usr/local/bin/yq
+        else
+          curl -LO https://github.com/mikefarah/yq/releases/download/v{{.YQ_VERSION}}/yq_linux_amd64
+          chmod +x yq_linux_amd64
+          mkdir -p ~/.local/bin
+          mv yq_linux_amd64 ~/.local/bin/yq
+        fi
+
+  dependencies:
+    desc: Install dependencies
+    cmds:
+      - task: go
+      - task: jq
+      - task: uv
+      - task: ruff
+      - task: shfmt
+      - task: tilt
+      - task: yq

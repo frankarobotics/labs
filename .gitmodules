@@ -1,0 +1,17 @@
+[submodule "services/sensors/realsense-camera/src/third_party/realsense-ros"]
+	path = services/sensors/realsense-camera/src/third_party/realsense-ros
+	url = https://github.com/IntelRealSense/realsense-ros.git
+[submodule "services/input/franka-gello/src/third_party/gello_software"]
+	path = services/input/franka-gello/src/third_party/gello_software
+	url = https://github.com/wuphilipp/gello_software
+	branch = main
+[submodule "services/actuators/robotiq-gripper/src/third_party/gello_software"]
+	path = services/actuators/robotiq-gripper/src/third_party/gello_software
+	url = https://github.com/wuphilipp/gello_software
+	branch = main
+[submodule "services/sensors/zed-camera/src/third_party/zed-ros2-wrapper"]
+	path = services/sensors/zed-camera/src/third_party/zed-ros2-wrapper
+	url = https://github.com/stereolabs/zed-ros2-wrapper.git
+[submodule "services/actuators/franka-robot/src/third_party/franka_follower_controllers"]
+	path = services/actuators/franka-robot/src/third_party/franka_follower_controllers
+	url = https://github.com/frankarobotics/franka_follower_controllers.git

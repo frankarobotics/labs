@@ -1,0 +1,22 @@
+data_processor:
+  enabled: true
+
+  # Polling settings
+  poll_interval_seconds: 5
+  episode_limit_per_poll: 5
+
+  # File paths (mounted via Docker volumes)
+  raw_data_path: /workspace/data/raw_episodes
+  processed_data_path: /workspace/data/processed_episodes
+
+  # AV1 encoding settings (libsvtav1)
+  av1_preset: 8 # 0-12, lower=slower/better quality (8=balanced)
+  av1_gop_size: 2 # Keyframe frequency (2=LeRobot standard)
+  av1_pixel_format: yuv420p # Color format
+  av1_threads: 0 # 0=auto-detect (quarter of available CPU cores)
+
+  # If true, delete raw episode data after successful conversion
+  delete_raw_episode: false
+
+data_collection:
+  url: http://localhost:3001

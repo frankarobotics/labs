@@ -1,0 +1,12 @@
+# Build outputs
+dist/
+build/
+coverage/
+.react-router/
+
+# Deps / caches
+node_modules
+
+# Misc
+*.log
+tsconfig.*

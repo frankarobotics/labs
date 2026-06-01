@@ -1,0 +1,100 @@
+[project]
+name = "franka_gello"
+version = "0.1.0"
+description = "Franka GELLO"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+dependencies = [
+    "dynamixel-sdk>=3.7.31",
+    "numpy>=2.2.6",
+    "pyyaml>=6.0.2",
+    "rclpy-intellisense>=1.2.0",
+    "tyro>=0.9.31",
+]
+
+[dependency-groups]
+dev = [
+    "debugpy>=1.8.17",
+    "mypy>=1.16.1",
+    "pytest-cov>=6.2.1",
+    "pytest>=8.4.1",
+    "ruff>=0.12.3",
+    "types-pyyaml>=6.0.12.20250516",
+]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+namespace_packages = true # Use the correct namespace package options
+explicit_package_bases = true # Use the correct namespace package options
+mypy_path = ["src"]
+exclude = '''
+  ^(.venv|.mypy_cache|.ruff_cache|build|dist|__pycache__|node_modules|third_party)
+'''
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "--exitfirst --tb=long --showlocals --cov=src --cov-report=term-missing"
+pythonpath = ["src"]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+lint.select = [
+    "F",   # Pyflakes (F) - Detects various errors
+    "E",   # pycodestyle (E, W) - PEP 8 style guide enforcement
+    "W",   # pycodestyle (E, W) - PEP 8 style guide enforcement
+    "B",   # flake8-bugbear (B) - Finds likely bugs and design problems
+    "A",   # flake8-builtins (A) - Checks for python builtins being used as variables or parameters
+    "I",   # isort (I) - Import sorting
+    "N",   # pep8-naming (N) - PEP 8 naming conventions
+    "UP",  # pyupgrade (UP) - Automatically upgrade syntax for newer Python versions
+    "C4",  # flake8-comprehensions (C4) - Better comprehensions
+    "SIM", # flake8-simplify (SIM) - Simplifies code
+    "ERA", # eradicate (ERA) - Finds commented out code
+    "Q",   # flake8-quotes (Q) - Checks quotes consistency
+    "S",   # flake8-bandit (S) - Finds security issues
+    "ANN", # flake8-annotations (ANN) - Type annotation checks
+    "D",   # pydocstyle (D) - Docstring style checking
+    "RUF", # Ruff-specific rules (RUF)
+    "RET", # Return (RET) - Checks return statements
+    "PL",  # Pylint (PL) - Pylint checks
+    "C90", # mccabe (C90) - Code complexity checks
+]
+lint.ignore = [
+    "B008", # B008: Do not perform function calls in argument defaults (needed for FastAPI dependency injection)
+    "D100", # D100: Missing docstring in public module (handled by pydocstyle)
+]
+exclude = [
+    ".venv",
+    ".mypy_cache",
+    ".ruff_cache",
+    "build",
+    "dist",
+    "__pycache__",
+    "node_modules",
+    "third_party",
+]
+
+# Configure rule-specific settings
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"**/*.py" = [
+    "ERA001", # Allow commented out code
+]
+"tests/**/*.py" = [
+    "D",       # No need for docstrings in tests
+    "PLR2004", # Allow magic value comparison in tests
+    "S101",    # Use asserts in tests
+]
+"__init__.py" = ["F401"] # Allow unused imports in __init__.py files

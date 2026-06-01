@@ -1,0 +1,4 @@
+robot1:
+  namespace: ""
+  ready_controller: "gravity_compensation_controller"
+  operating_controller: "cartesian_pose_example_controller"

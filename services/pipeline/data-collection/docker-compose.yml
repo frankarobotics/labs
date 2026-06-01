@@ -1,0 +1,20 @@
+services:
+  data-collection:
+    image: ${DOCKER_REGISTRY:-registry.localhost}/labs/data-collection:${DOCKER_TAG:-latest}
+    build:
+      context: .
+      dockerfile: data-collection.dockerfile
+      target: ${BUILD_TARGET:-dev}
+      args:
+        BUILD_TARGET: ${BUILD_TARGET:-dev}
+        BUILD_CREATED: ${BUILD_CREATED:-}
+        BUILD_VERSION: ${BUILD_VERSION:-}
+        GIT_COMMIT: ${GIT_COMMIT:-}
+    container_name: data-collection
+    network_mode: host
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro

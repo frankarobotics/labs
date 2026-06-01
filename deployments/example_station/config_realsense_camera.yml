@@ -1,0 +1,19 @@
+LEFT:
+  serial_number: "xxxxxxxxxxxx"
+  camera_name: camera
+  camera_namespace: wrist_camera_left
+  depth_module.color_profile: "640x480x30"
+  enable_depth: false
+  enable_infra1: false
+  enable_infra2: false
+  enable_color: true
+
+RIGHT:
+  serial_number: "xxxxxxxxxxxx"
+  camera_name: camera
+  camera_namespace: wrist_camera_right
+  depth_module.color_profile: "640x480x30"
+  enable_depth: false
+  enable_infra1: false
+  enable_infra2: false
+  enable_color: true

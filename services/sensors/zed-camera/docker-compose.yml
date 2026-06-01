@@ -1,0 +1,34 @@
+x-ros-environment: &common-ros-env
+  ROS_DOMAIN_ID: 100
+  DISABLE_CYCLONEDDS: false
+  CYCLONEDDS_NETWORK_INTERFACE_ADDRESS: '127.0.0.1'
+
+services:
+  zed-camera:
+    image: registry.localhost/labs/zed-camera:latest
+    # image: stereolabs/zed:5.0-gl-devel-cuda12.8-ubuntu24.04
+    build:
+      context: .
+      dockerfile: zed-camera.dockerfile
+      target: ${BUILD_TARGET:-dev}
+      args:
+        BUILD_TARGET: ${BUILD_TARGET:-dev}
+        BUILD_CREATED: ${BUILD_CREATED:-}
+        BUILD_VERSION: ${BUILD_VERSION:-}
+        GIT_COMMIT: ${GIT_COMMIT:-}
+    container_name: zed-camera
+    network_mode: host
+    restart: unless-stopped
+    privileged: true
+    ipc: host
+    pid: host
+    stdin_open: true # docker run -i
+    tty: true # docker run -t
+    environment:
+      <<: *common-ros-env
+      DISPLAY: ${DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - /usr/local/zed/resources:/usr/local/zed/resources
+      - /etc/localtime:/etc/localtime:ro
+    runtime: nvidia

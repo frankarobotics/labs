@@ -1,0 +1,29 @@
+services:
+  realsense-camera:
+    image: ${DOCKER_REGISTRY:-registry.localhost}/labs/realsense-camera:${DOCKER_TAG:-latest}
+    build:
+      context: .
+      dockerfile: realsense-camera.dockerfile
+      target: ${BUILD_TARGET:-dev}
+      args:
+        BUILD_TARGET: ${BUILD_TARGET:-dev}
+        BUILD_CREATED: ${BUILD_CREATED:-}
+        BUILD_VERSION: ${BUILD_VERSION:-}
+        GIT_COMMIT: ${GIT_COMMIT:-}
+    container_name: realsense-camera
+    network_mode: host
+    restart: unless-stopped
+    privileged: true
+    ipc: host
+    pid: host
+    shm_size: '1gb'
+    stdin_open: true # docker run -i
+    tty: true # docker run -t
+    environment:
+      DISPLAY: ${DISPLAY}
+      # SERIAL_NUMBER: 218622279824 # Uncomment if you have more than one realsense camera connected and set your RealSense camera's serial number
+    volumes:
+      - /dev:/dev
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /etc/localtime:/etc/localtime:ro
+      - /tmp/.docker.xauth:/tmp/.docker.xauth:rw

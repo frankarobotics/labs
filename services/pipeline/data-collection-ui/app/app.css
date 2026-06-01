@@ -1,0 +1,211 @@
+@import 'tailwindcss';
+
+@theme {
+  /* --breakpoint-*: initial; */
+  /* --breakpoint-screen: 118.75rem; */
+
+  --font-sans:
+    'Lato', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+    'Noto Color Emoji';
+  --color-franka-blue-600: #132126;
+  --color-franka-blue-500: #1b2f36;
+  --color-franka-blue-400: #32444a;
+  --color-franka-blue-300: #49595e;
+  --color-franka-blue-200: #768286;
+  --color-franka-blue: var(--color-franka-blue-500);
+  --color-adriatic-500: #587380;
+  --color-adriatic-400: #798f99;
+  --color-adriatic-300: #9babb3;
+  --color-adriatic-200: #bcc7cc;
+  --color-adriatic-100: #dee3e6;
+  --color-adriatic: var(--color-adriatic-500);
+  --color-pastel-grey-500: #d4dbdc;
+  --color-pastel-grey-400: #dde2e3;
+  --color-pastel-grey-300: #e5e9ea;
+  --color-pastel-grey-200: #eef1f1;
+  --color-pastel-grey-100: #f6f8f8;
+  --color-pastel-grey: var(--color-pastel-grey-500);
+  --color-deep-sky-500: #2bb2df;
+  --color-deep-sky-400: #55c1e5;
+  --color-deep-sky-300: #80d1ec;
+  --color-deep-sky-200: #aae0f2;
+  --color-deep-sky-100: #dff0f9;
+  --color-deep-sky: var(--color-deep-sky-500);
+  --color-information-600: #2060ad;
+  --color-information-500: #2878d8;
+  --color-information-400: #5393e0;
+  --color-information-300: #a9c9ef;
+  --color-information-200: #e0eefe;
+  --color-information: var(--color-information-500);
+  --color-positive-600: #2eb786;
+  --color-positive-500: #3ae5a8;
+  --color-positive-400: #7cf8cc;
+  --color-positive-300: #b0f5dc;
+  --color-positive-200: #e2fcf3;
+  --color-positive: var(--color-positive-500);
+  --color-negative-600: #be5450;
+  --color-negative-500: #ed6964;
+  --color-negative-400: #f18783;
+  --color-negative-300: #f8c3c1;
+  --color-negative-200: #fff2f1;
+  --color-negative: var(--color-negative-500);
+  --color-critical-lemon-600: #c4ad4f;
+  --color-critical-lemon-500: #f5d863;
+  --color-critical-lemon-400: #f7e082;
+  --color-critical-lemon-300: #f9e8a1;
+  --color-critical-lemon-200: #fdf7e0;
+  --color-critical-lemon: var(--color-critical-lemon-500);
+  --color-critical-peach-600: #df8a61;
+  --color-critical-peach-500: #ffaa81;
+  --color-critical-peach-400: #ffba99;
+  --color-critical-peach-300: #ffd4bf;
+  --color-critical-peach-200: #ffede5;
+  --color-critical-peach: var(--color-critical-peach-500);
+  --color-neutral-600: #375361;
+  --color-neutral-500: #5a8aa1;
+  --color-neutral-400: #7ba1b4;
+  --color-neutral-300: #9cb9c7;
+  --color-neutral-200: #dee8ec;
+  --color-neutral: var(--color-neutral-500);
+}
+
+@layer components {
+  .keyboard-focus {
+    @apply focus-visible:focus:ring-deep-sky/30 focus-visible:focus:ring-4 focus-visible:focus:outline-none;
+  }
+
+  dialog.sidebar-menu {
+    @apply /* screen:p-5 */ absolute top-20 right-0 left-2/3 w-1/3 bg-transparent p-3 opacity-100 transition-all duration-300 backdrop:bg-black/30 starting:open:opacity-0;
+    height: calc(100% - --spacing(20));
+    & .section-container {
+      @apply h-full w-full bg-white;
+    }
+  }
+
+  .section-container {
+    @apply bg-pastel-grey-100 relative flex flex-col overflow-hidden rounded-sm;
+
+    & > .fullbleed-inline {
+      margin-inline: calc(-1 * var(--container-spacing));
+      &.padding {
+        padding-inline: var(--container-spacing);
+      }
+    }
+    & > .fullbleed-block {
+      margin-block: calc(-1 * var(--container-spacing));
+      &.padding {
+        padding-block: var(--container-spacing);
+      }
+    }
+    & > .fullbleed {
+      margin: calc(-1 * var(--container-spacing));
+      &.padding {
+        padding: var(--container-spacing);
+      }
+    }
+    & > .fullbleed-t {
+      margin-top: 0;
+      top: var(--container-spacing);
+    }
+    & > .fullbleed-r {
+      margin-right: 0;
+      right: var(--container-spacing);
+    }
+    & > .fullbleed-b {
+      margin-bottom: 0;
+      bottom: var(--container-spacing);
+    }
+    & > .fullbleed-l {
+      margin-left: 0;
+      left: var(--container-spacing);
+    }
+  }
+  .section-container[data-spacing='compact'] {
+    @apply /* screen:p-5 screen:gap-5 */ gap-3 p-3;
+    --container-spacing: calc(var(--spacing) * 3);
+    /* @variant screen { */
+    /*   --container-spacing: calc(var(--spacing) * 5); */
+    /* } */
+  }
+  .section-container[data-spacing='wide'] {
+    @apply /* screen:p-5 screen:gap-5 */ gap-4 p-4;
+    --container-spacing: calc(var(--spacing) * 4);
+    /* @variant screen { */
+    /*   --container-spacing: calc(var(--spacing) * 5); */
+    /* } */
+  }
+  .text {
+    @apply text-franka-blue-600 /* screen:text-xl */ font-sans text-sm font-medium;
+    @variant disabled {
+      @apply text-adriatic-200;
+    }
+    @variant group-disabled {
+      @apply text-adriatic-200;
+    }
+  }
+  .action {
+    @apply text-franka-blue-600 /* screen:text-lg */ font-sans text-xs leading-0 font-extrabold;
+  }
+
+  .header {
+    @apply text-franka-blue-600 /* screen:text-2xl */ font-sans text-lg font-bold;
+  }
+
+  .hidden-scrollbar {
+    scrollbar-color: transparent transparent;
+    scrollbar-gutter: stable;
+    transition: scrollbar-color 0.3s linear;
+  }
+
+  .hidden-scrollbar:hover {
+    scrollbar-color: var(--color-franka-blue-200) transparent;
+  }
+
+  /* .hidden-scrollbar::-webkit-scrollbar { */
+  /*   width: 8px; */
+  /*   height: 8px; */
+  /* } */
+
+  /* .hidden-scrollbar::-webkit-scrollbar-thumb { */
+  /*   background: transparent; */
+  /*   transition: background 0.3s; */
+  /* } */
+
+  /* .hidden-scrollbar::-webkit-scrollbar-thumb, */
+  /* .hidden-scrollbar:active::-webkit-scrollbar-thumb { */
+  /*   background: rgba(0, 0, 0, 0.4); */
+  /* } */
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@utility shimmer-div {
+  @apply bg-[length:200%_100%];
+  animation: shimmer var(--shimmer-duration, 1.8s) linear infinite;
+  will-change: background-position;
+}
+
+@utility shimmer-text {
+  @apply bg-[length:200%_100%] bg-clip-text text-transparent;
+
+  animation: shimmer var(--shimmer-duration, 1.8s) linear infinite;
+  will-change: background-position;
+}
+
+@utility shimmer-speed-* {
+  --shimmer-duration: calc(--value(integer) * 1ms);
+}
+
+@variant motion-reduce {
+  .shimmer-text {
+    animation: none;
+  }
+}

@@ -1,0 +1,9 @@
+LEFT:
+  namespace: "left"
+  ready_controller: "gravity_compensation_controller"
+  operating_controller: "joint_follower_controller"
+
+RIGHT:
+  namespace: "right"
+  ready_controller: "gravity_compensation_controller"
+  operating_controller: "joint_follower_controller"

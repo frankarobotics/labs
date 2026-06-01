@@ -1,0 +1,25 @@
+url: "0.0.0.0:3002"
+output_path: "/workspace/data/raw_episodes"
+ros_topics:
+  - '/parameter_events'
+  - '/rosout'
+  - '/tf'
+  - '/tf_static'
+  # Observation topics: Robot states (ROBOT_OBSERVER)
+  - '/left/franka_robot_state_broadcaster/measured_joint_states'
+  - '/left/follower/gripper/joint_states'
+  - '/left/franka_robot_state_broadcaster/external_joint_torques'
+  - '/left/franka_robot_state_broadcaster/external_wrench_in_stiffness_frame'
+  - '/right/franka_robot_state_broadcaster/measured_joint_states'
+  - '/right/follower/gripper/joint_states'
+  - '/right/franka_robot_state_broadcaster/external_joint_torques'
+  - '/right/franka_robot_state_broadcaster/external_wrench_in_stiffness_frame'
+  # Action topics (follower_topics from TELEOP_ROBOT)
+  - '/left/follower/gello/joint_states'
+  - '/right/follower/gello/joint_states'
+  - '/left/follower/gripper/gripper_client/target_gripper_width_percent'
+  - '/right/follower/gripper/gripper_client/target_gripper_width_percent'
+  # Observation topics: Cameras (REALSENSE_CAMERA & ZED_CAMERA)
+  - '/wrist_camera_left/camera/color/image_raw'
+  - '/wrist_camera_right/camera/color/image_raw'
+  - '/head_camera/zed_node/rgb/image_rect_color'

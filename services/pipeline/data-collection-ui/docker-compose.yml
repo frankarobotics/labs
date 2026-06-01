@@ -1,0 +1,15 @@
+services:
+  data-collection-ui:
+    image: ${DOCKER_REGISTRY:-registry.localhost}/labs/data-collection-ui:${DOCKER_TAG:-latest}
+    build:
+      context: .
+      dockerfile: data-collection-ui.dockerfile
+      target: ${BUILD_TARGET:-dev}
+      args:
+        BUILD_TARGET: ${BUILD_TARGET:-dev}
+        BUILD_CREATED: ${BUILD_CREATED:-}
+        BUILD_VERSION: ${BUILD_VERSION:-}
+        GIT_COMMIT: ${GIT_COMMIT:-}
+    container_name: data-collection-ui
+    network_mode: host
+    restart: unless-stopped

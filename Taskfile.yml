@@ -1,0 +1,226 @@
+version: "3"
+
+dotenv: [".env"]
+
+includes:
+  install:
+    dir: .
+    taskfile: Taskfile.install.yml
+
+vars:
+  PRETTIER_VERSION: 3.6.2
+  RUFF_VERSION: 0.12.1
+  RUFF_THIRD_PARTY_EXCLUDE: "**/third_party/**"
+  SHFMT_EXCLUDE_REGEX: "(^|/)tmp/|(^|/)third_party/|(^|/)\\.venv/"
+
+  # Docker vars
+  BUILD_CREATED:
+    sh: date -u +'%Y-%m-%dT%H:%M:%SZ'
+  GIT_COMMIT:
+    sh: git rev-parse HEAD 2>/dev/null || echo "latest"
+  BUILD_VERSION: '{{.BUILD_VERSION | default .GIT_COMMIT}}'
+  BUILD_TARGET: '{{.BUILD_TARGET | default "dev"}}'
+  DOCKER_REGISTRY: '{{.DOCKER_REGISTRY | default "registry.localhost"}}'
+  DOCKER_TAG: '{{.DOCKER_TAG | default "latest"}}'
+
+tasks:
+  list-services:
+    desc: List all available services
+    cmds:
+      - |
+        echo "Available services:"
+        find services -name "docker-compose.yml" -type f | grep -v "third_party" | xargs -I{} dirname {} | xargs -I{} basename {} | sort
+
+  build:
+    desc: "Build service container (usage: task build SERVICE=name)"
+    preconditions:
+      - sh: '[ -n "{{.SERVICE}}" ]'
+        msg: "SERVICE is required. Usage: task build SERVICE=name"
+    cmds:
+      - |
+        SERVICE_PATH=$(find services -type d -name "{{.SERVICE}}" 2>/dev/null | head -1)
+        if [ -z "$SERVICE_PATH" ]; then
+          echo "Error: Service not found: {{.SERVICE}}" >&2
+          exit 1
+        fi
+        cd "$SERVICE_PATH"
+        docker compose build $([ "${NO_CACHE}" = "1" ] && echo "--no-cache") \
+          --build-arg BUILD_TARGET={{.BUILD_TARGET}} \
+          --build-arg BUILD_VERSION={{.BUILD_VERSION}} \
+          --build-arg GIT_COMMIT={{.GIT_COMMIT}}
+
+  start:
+    desc: "Start service container (usage: task start SERVICE=name)"
+    deps: [build]
+    preconditions:
+      - sh: '[ -n "{{.SERVICE}}" ]'
+        msg: "SERVICE is required. Usage: task start SERVICE=name"
+    cmds:
+      - |
+        SERVICE_PATH=$(find services -type d -name "{{.SERVICE}}" 2>/dev/null | head -1)
+        if [ -z "$SERVICE_PATH" ]; then
+          echo "Error: Service not found: {{.SERVICE}}" >&2
+          exit 1
+        fi
+        cd "$SERVICE_PATH"
+        docker compose up -d
+
+  stop:
+    desc: "Stop service container (usage: task stop SERVICE=name)"
+    preconditions:
+      - sh: '[ -n "{{.SERVICE}}" ]'
+        msg: "SERVICE is required. Usage: task stop SERVICE=name"
+    cmds:
+      - |
+        SERVICE_PATH=$(find services -type d -name "{{.SERVICE}}" 2>/dev/null | head -1)
+        if [ -z "$SERVICE_PATH" ]; then
+          echo "Error: Service not found: {{.SERVICE}}" >&2
+          exit 1
+        fi
+        cd "$SERVICE_PATH"
+        docker compose down
+
+  restart:
+    desc: "Restart service container (usage: task restart SERVICE=name)"
+    cmds:
+      - task: stop
+      - task: start
+
+  logs:
+    desc: "Show service logs (usage: task logs SERVICE=name)"
+    preconditions:
+      - sh: '[ -n "{{.SERVICE}}" ]'
+        msg: "SERVICE is required. Usage: task logs SERVICE=name"
+    cmds:
+      - |
+        if ! docker ps --format '{{`{{.Names}}`}}' | grep -qx "{{.SERVICE}}"; then
+          echo "Error: Container '{{.SERVICE}}' is not running" >&2
+          docker ps --format '  {{`{{.Names}}`}}' | sort
+          exit 1
+        fi
+        docker logs -f {{.SERVICE}}
+
+  exec:
+    desc: "Exec into service container (usage: task exec SERVICE=name)"
+    preconditions:
+      - sh: '[ -n "{{.SERVICE}}" ]'
+        msg: "SERVICE is required. Usage: task exec SERVICE=name"
+    cmds:
+      - |
+        if ! docker ps --format '{{`{{.Names}}`}}' | grep -qx "{{.SERVICE}}"; then
+          echo "Error: Container '{{.SERVICE}}' is not running" >&2
+          echo "Running containers:"
+          docker ps --format '  {{`{{.Names}}`}}' | sort
+          exit 1
+        fi
+        docker exec -it {{.SERVICE}} bash
+
+  format-check:
+    desc: Check file formatting
+    cmds:
+      - |
+        if [[ "$CI" == 1 ]];then
+          uvx ruff@{{.RUFF_VERSION}} format --check --exclude "{{.RUFF_THIRD_PARTY_EXCLUDE}}" .
+          npx prettier@{{.PRETTIER_VERSION}} --check "**/*.json"
+          npx prettier@{{.PRETTIER_VERSION}} --check "**/*.md"
+          shfmt -f . | grep -vE "{{.SHFMT_EXCLUDE_REGEX}}" | xargs shfmt -i 4 -ci -d
+        else
+          uvx ruff@{{.RUFF_VERSION}} format --check --exclude "{{.RUFF_THIRD_PARTY_EXCLUDE}}" .
+          docker pull tmknom/prettier:{{.PRETTIER_VERSION}}
+          docker run --rm -u "$(id -u):$(id -g)" -v $(pwd):/work tmknom/prettier:{{.PRETTIER_VERSION}} --check "**/*.json"
+          docker run --rm -u "$(id -u):$(id -g)" -v $(pwd):/work tmknom/prettier:{{.PRETTIER_VERSION}} --check "**/*.md"
+          shfmt -f . | grep -vE "{{.SHFMT_EXCLUDE_REGEX}}" | xargs shfmt -i 4 -ci -d
+        fi
+
+  format:
+    desc: Format files
+    cmds:
+      - |
+        if [[ "$CI" == 1 ]];then
+          uvx ruff@{{.RUFF_VERSION}} format --exclude "{{.RUFF_THIRD_PARTY_EXCLUDE}}" .
+          npx prettier@{{.PRETTIER_VERSION}} --write "**/*.json"
+          npx prettier@{{.PRETTIER_VERSION}} --write "**/*.md"
+          shfmt -f . | grep -vE "{{.SHFMT_EXCLUDE_REGEX}}" | xargs shfmt -i 4 -ci -w
+        else
+          uvx ruff@{{.RUFF_VERSION}} format --exclude "{{.RUFF_THIRD_PARTY_EXCLUDE}}" .
+          docker run --rm -u "$(id -u):$(id -g)" -v $(pwd):/work tmknom/prettier:{{.PRETTIER_VERSION}} --write "**/*.json"
+          docker run --rm -u "$(id -u):$(id -g)" -v $(pwd):/work tmknom/prettier:{{.PRETTIER_VERSION}} --write "**/*.md"
+          shfmt -f . | grep -vE "{{.SHFMT_EXCLUDE_REGEX}}" | xargs shfmt -i 4 -ci -w
+        fi
+
+  lint-check:
+    desc: Check file linting
+    cmds:
+      - uvx ruff@{{.RUFF_VERSION}} check --exclude "{{.RUFF_THIRD_PARTY_EXCLUDE}}" .
+
+  lint:
+    desc: Fix lint issues (Ruff auto-fix)
+    cmds:
+      - |
+        if [[ "$CI" == 1 ]];then
+          uvx ruff@{{.RUFF_VERSION}} check --exclude "{{.RUFF_THIRD_PARTY_EXCLUDE}}" .
+        else
+          uvx ruff@{{.RUFF_VERSION}} check --exclude "{{.RUFF_THIRD_PARTY_EXCLUDE}}" --fix .
+        fi
+
+  pre-commit-check:
+    desc: Pre commit check
+    cmds:
+      - task: format-check
+      - task: lint-check
+
+  # ---------------------------------------------------------------------------
+  # Dataset Builder
+  # ---------------------------------------------------------------------------
+  #
+  # Quick usage — convert a single episode:
+  #
+  #   task dataset-builder-convert-episode \
+  #     INPUT_MCAP=/workspace/data/processed_episodes/<date>/<uuid>/mcap/mcap_0.mcap \
+  #     DATASET_NAME=<dataset-name>
+  #
+  # The output is written to /workspace/data/datasets/lerobot/<dataset-name>.
+  # Override with OUTPUT_DIR if a non-standard path is needed.
+  # DEPLOYMENT_DIR defaults to /workspace/deployments/example_station.
+  # Pass extra CLI flags via CLI_ARGS, e.g. CLI_ARGS="--fps 30".
+  # Override data paths via DATA_ROOT (default ./data) and DEPLOYMENTS_ROOT (default ./deployments).
+  # ---------------------------------------------------------------------------
+
+  dataset-builder-run:
+    desc: "Run a command inside the dataset-builder container (usage: task dataset-builder-run CMD='uv run pytest')"
+    vars:
+      CMD: '{{.CMD | default "/bin/bash"}}'
+    cmds:
+      - task: build
+        vars: { SERVICE: dataset-builder }
+      - |
+        docker run -it --rm \
+          -v ${DATA_ROOT:-./data}:/workspace/data \
+          -v ${DEPLOYMENTS_ROOT:-./deployments}:/workspace/deployments \
+          {{.DOCKER_REGISTRY}}/labs/dataset-builder:{{.DOCKER_TAG}} \
+          {{.CMD}}
+
+  dataset-builder-convert-episode:
+    desc: Convert a single processed MCAP episode to a LeRobot dataset (set INPUT_MCAP, DATASET_NAME; optionally DEPLOYMENT_DIR)
+    vars:
+      INPUT_MCAP: '{{.INPUT_MCAP | default .Env.INPUT_MCAP}}'
+      DATASET_NAME: '{{.DATASET_NAME | default (.Env.DATASET_NAME | default "my-dataset")}}'
+      DEPLOYMENT_DIR: '{{.DEPLOYMENT_DIR | default (.Env.DEPLOYMENT_DIR | default "/workspace/deployments/example_station")}}'
+    preconditions:
+      - sh: '[ -n "{{.INPUT_MCAP}}" ]'
+        msg: "INPUT_MCAP is required. Usage: task dataset-builder-convert-episode INPUT_MCAP=... DATASET_NAME=..."
+      - sh: '[ -n "{{.DATASET_NAME}}" ]'
+        msg: "DATASET_NAME is required. Usage: task dataset-builder-convert-episode INPUT_MCAP=... DATASET_NAME=..."
+    cmds:
+      - task: build
+        vars: { SERVICE: dataset-builder }
+      - |
+        docker run --rm \
+          -v ${DATA_ROOT:-./data}:/workspace/data \
+          -v ${DEPLOYMENTS_ROOT:-./deployments}:/workspace/deployments \
+          {{.DOCKER_REGISTRY}}/labs/dataset-builder:{{.DOCKER_TAG}} \
+          ./entrypoint.sh \
+            --dataset-name {{.DATASET_NAME}} \
+            --deployment-dir {{.DEPLOYMENT_DIR}} \
+            single --input {{.INPUT_MCAP}} \
+            {{.CLI_ARGS}}

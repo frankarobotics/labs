@@ -1,0 +1,274 @@
+x-ros-environment: &common-ros-env
+  ROS_DOMAIN_ID: 100
+  RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+  CYCLONEDDS_URI: file:///workspace/cyclonedds.xml
+
+x-app-environment: &common-app-env
+  LOG_LEVEL: INFO
+
+services:
+  data-collection:
+    image: registry.localhost/labs/data-collection:latest
+    container_name: data-collection
+    network_mode: host
+    restart: unless-stopped
+    stop_signal: SIGINT
+    privileged: true
+    # Solution for dds connectivity between different containers (ipc and pid set to host)
+    # https://robotics.stackexchange.com/questions/87845/ros2-connectivity-across-docker-containers-via-host-driver
+    ipc: host
+    pid: host
+    stdin_open: true # docker run -i
+    tty: true # docker run -t
+    volumes:
+      - /dev:/dev
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /tmp/.docker.xauth:/tmp/.docker.xauth:rw
+      - ./config_station.yml:/workspace/config_station.yml
+      - ./config_tasks.yml:/workspace/config_tasks.yml
+      - ./config_data_collection.yml:/workspace/config_data_collection.yml
+      - ${DATA_ROOT:-../../data}:/workspace/data
+      - ./cyclonedds.xml:/workspace/cyclonedds.xml:ro
+    environment:
+      <<: [*common-ros-env, *common-app-env]
+      XAUTHORITY: /tmp/.docker.xauth
+      DISPLAY: ${DISPLAY}
+      TERM: ${TERM}
+      QT_X11_NO_MITSHM: 1
+      TF_CPP_MIN_LOG_LEVEL: 1
+
+  data-recorder:
+    image: registry.localhost/labs/data-recorder:latest
+    container_name: data-recorder
+    network_mode: host
+    restart: unless-stopped
+    stop_signal: SIGINT
+    privileged: true
+    # Solution for dds connectivity between different containers (ipc and pid set to host)
+    # https://robotics.stackexchange.com/questions/87845/ros2-connectivity-across-docker-containers-via-host-driver
+    ipc: host
+    pid: host
+    shm_size: '1gb'
+    stdin_open: true # docker run -i
+    tty: true # docker run -t
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${DATA_ROOT:-../../data}:/workspace/data
+      - ./config_data_recorder.yml:/workspace/config_data_recorder.yml
+      - ./cyclonedds.xml:/workspace/cyclonedds.xml:ro
+    environment:
+      <<: [*common-ros-env, *common-app-env]
+      DISPLAY: ${DISPLAY}
+
+  data-processor:
+    image: registry.localhost/labs/data-processor:latest
+    container_name: data-processor
+    network_mode: host
+    restart: unless-stopped
+    privileged: true
+    stdin_open: true
+    tty: true
+    environment:
+      <<: *common-app-env
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${DATA_ROOT:-../../data}:/workspace/data
+      - ./config_data_processor.yml:/workspace/config_data_processor.yml
+
+  franka-gello:
+    image: registry.localhost/labs/franka-gello:latest
+    container_name: franka-gello
+    network_mode: host
+    restart: unless-stopped
+    stop_signal: SIGINT
+    privileged: true
+    ipc: host
+    pid: host
+    shm_size: '1gb'
+    stdin_open: true # docker run -i
+    tty: true # docker run -t
+    volumes:
+      - /dev:/dev
+      - /etc/localtime:/etc/localtime:ro
+      - ./config_gello.yml:/workspace/config_gello.yml
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /tmp/.docker.xauth:/tmp/.docker.xauth:rw
+      - ./cyclonedds.xml:/workspace/cyclonedds.xml:ro
+    environment:
+      <<: [*common-ros-env, *common-app-env]
+      DISPLAY: ${DISPLAY}
+      QT_X11_NO_MITSH: '1'
+      XAUTHORITY: /tmp/.docker.xauth
+
+  franka-robot:
+    image: registry.localhost/labs/franka-robot:latest
+    container_name: franka-robot
+    network_mode: host
+    restart: unless-stopped
+    stop_signal: SIGINT
+    privileged: true
+    # Solution for dds connectivity between different containers (ipc and pid set to host)
+    # https://robotics.stackexchange.com/questions/87845/ros2-connectivity-across-docker-containers-via-host-driver
+    ipc: host
+    pid: host
+    stdin_open: true # docker run -i
+    tty: true # docker run -t
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ./config_franka_robot.yml:/workspace/config_franka_robot.yml
+      - ./cyclonedds.xml:/workspace/cyclonedds.xml:ro
+    environment:
+      <<: [*common-ros-env, *common-app-env]
+      PATH: /opt/openrobots/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      PKG_CONFIG_PATH: /opt/openrobots/lib/pkgconfig:/usr/local/lib/pkgconfig:/usr/lib/pkgconfig
+      LD_LIBRARY_PATH: /opt/openrobots/lib:/usr/local/lib:/usr/lib
+      PYTHONPATH: /opt/openrobots/lib/python3.10/site-packages:/usr/local/lib/python3.10/site-packages
+      CMAKE_PREFIX_PATH: /opt/openrobots:/usr/local
+      COLLISION_SCALE: '1.5'
+      CONTROLLER_TYPE: ${CONTROLLER_TYPE:-joint}
+    cap_add:
+      - SYS_NICE
+    ulimits:
+      rtprio: 99
+      rttime: -1
+      memlock: 8428281856
+
+  robotiq-gripper:
+    image: registry.localhost/labs/robotiq-gripper:latest
+    container_name: robotiq-gripper
+    network_mode: host
+    restart: unless-stopped
+    stop_signal: SIGINT
+    privileged: true
+    # Solution for dds connectivity between different containers (ipc and pid set to host)
+    # https://robotics.stackexchange.com/questions/87845/ros2-connectivity-across-docker-containers-via-host-driver
+    ipc: host
+    pid: host
+    stdin_open: true # docker run -i
+    tty: true # docker run -t
+    volumes:
+      - /dev:/dev
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ./config_robotiq_gripper.yml:/workspace/config_robotiq_gripper.yml
+      - ./cyclonedds.xml:/workspace/cyclonedds.xml:ro
+    environment:
+      <<: [*common-ros-env, *common-app-env]
+      FAKE_HARDWARE: false
+
+  zed-camera-head:
+    image: registry.localhost/labs/zed-camera:latest
+    container_name: zed-camera-head
+    network_mode: host
+    restart: unless-stopped
+    stop_signal: SIGINT
+    privileged: true
+    ipc: host
+    pid: host
+    stdin_open: true # docker run -i
+    tty: true # docker run -t
+    environment:
+      <<: [*common-ros-env, *common-app-env]
+      DISPLAY: ${DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - /usr/local/zed/resources:/usr/local/zed/resources
+      - /etc/localtime:/etc/localtime:ro
+      - /tmp/.docker.xauth:/tmp/.docker.xauth:rw
+      - ./cyclonedds.xml:/workspace/cyclonedds.xml:ro
+      - ./config_zed_camera.yml:/workspace/config_zed_camera.yml
+    runtime: nvidia
+
+  realsense-camera-wrist:
+    image: registry.localhost/labs/realsense-camera:latest
+    container_name: realsense-camera-wrist
+    network_mode: host
+    restart: unless-stopped
+    stop_signal: SIGINT
+    privileged: true
+    ipc: host
+    pid: host
+    shm_size: '1gb'
+    stdin_open: true # docker run -i
+    tty: true # docker run -t
+    environment:
+      <<: [*common-ros-env, *common-app-env]
+      DISPLAY: ${DISPLAY}
+    volumes:
+      - /dev:/dev
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /etc/localtime:/etc/localtime:ro
+      - /tmp/.docker.xauth:/tmp/.docker.xauth:rw
+      - ./cyclonedds.xml:/workspace/cyclonedds.xml:ro
+      - ./config_realsense_camera.yml:/workspace/config_realsense_camera.yml
+
+  data-collection-ui:
+    image: registry.localhost/labs/data-collection-ui:latest
+    container_name: data-collection-ui
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./config_data_collection.yml:/workspace/config_data_collection.yml
+
+  migrate:
+    image: registry.localhost/labs/migrate:latest
+    container_name: migrate
+    network_mode: host
+    depends_on:
+      - postgres
+    stdin_open: true
+    tty: true
+    environment:
+      DATABASE_URL: 'postgres://postgres:postgres@localhost:5433/labs?sslmode=disable'
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+
+  postgres:
+    image: postgres:18rc1
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-labs}
+    ports:
+      - '5433:5432'
+    volumes:
+      - labs_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER:-postgres}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  controller-coordinator:
+    image: registry.localhost/labs/controller-coordinator:latest
+    container_name: controller-coordinator
+    network_mode: host
+    restart: unless-stopped
+    stop_signal: SIGINT
+    privileged: true
+    # Solution for dds connectivity between different containers (ipc and pid set to host)
+    # https://robotics.stackexchange.com/questions/87845/ros2-connectivity-across-docker-containers-via-host-driver
+    ipc: host
+    pid: host
+    shm_size: '1gb'
+    stdin_open: true # docker run -i
+    tty: true # docker run -t
+    volumes:
+      - /dev:/dev
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /etc/localtime:/etc/localtime:ro
+      - ./config_controller_coordinator.yml:/workspace/config_controller_coordinator.yml
+      - ./cyclonedds.xml:/workspace/cyclonedds.xml:ro
+    environment:
+      <<: [*common-ros-env, *common-app-env]
+      XAUTHORITY: /tmp/.docker.xauth
+      DISPLAY: ${DISPLAY}
+      TERM: ${TERM}
+      QT_X11_NO_MITSHM: 1
+      TF_CPP_MIN_LOG_LEVEL: 1
+
+volumes:
+  labs_postgres_data:

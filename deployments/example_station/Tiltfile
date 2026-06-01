@@ -1,0 +1,198 @@
+# pyright: reportUndefinedVariable=false, reportUnknownMemberType=false
+# ruff: noqa:E501,F821
+
+# Settings
+# https://docs.tilt.dev/api.html
+analytics_settings(enable=False)
+ci_settings(timeout="30m")
+
+docker_prune_settings(
+    disable=True
+)
+
+update_settings(
+    max_parallel_updates=10,
+    k8s_upsert_timeout_secs=30,
+    suppress_unused_image_warnings=None,
+)
+
+version_settings(check_updates=False)
+
+docker_compose("docker-compose.yml")
+
+git_commit = str(local("git -C ../../ rev-parse HEAD")).strip()
+common_build_args = {"BUILD_TARGET": "dev", "BUILD_VERSION": git_commit, "GIT_COMMIT": git_commit}
+
+# Docker builds
+docker_build(
+    ref="registry.localhost/labs/migrate:latest",
+    context="../../services/pipeline/migrate",
+    dockerfile="../../services/pipeline/migrate/migrate.dockerfile",
+    build_args=common_build_args,
+    target="dev",
+    live_update=[
+        sync(
+            "../../services/pipeline/migrate/migrations",
+            "/workspace/migrations",
+        ),
+        # No restart needed, one-shot job
+    ],
+)
+
+docker_build(
+    ref="registry.localhost/labs/data-collection:latest",
+    context="../../services/pipeline/data-collection",
+    dockerfile="../../services/pipeline/data-collection/data-collection.dockerfile",
+    build_args=common_build_args,
+    target="dev",
+    live_update=[
+        sync(
+            "../../services/pipeline/data-collection/src",
+            "/workspace/src",
+        ),
+        # Restart the process to pick up the changed files.
+        restart_container(),
+    ],
+)
+
+docker_build(
+    ref="registry.localhost/labs/data-recorder:latest",
+    context="../../services/pipeline/data-recorder",
+    dockerfile="../../services/pipeline/data-recorder/data-recorder.dockerfile",
+    build_args=common_build_args,
+    target="dev",
+    live_update=[
+        sync(
+            "../../services/pipeline/data-recorder/src",
+            "/workspace/src",
+        ),
+        # Restart the process to pick up the changed files.
+        restart_container(),
+    ],
+)
+
+docker_build(
+    ref="registry.localhost/labs/franka-gello:latest",
+    context="../../services/input/franka-gello",
+    dockerfile="../../services/input/franka-gello/franka-gello.dockerfile",
+    build_args=common_build_args,
+    target="dev",
+    live_update=[
+        sync(
+            "../../services/input/franka-gello/src",
+            "/workspace/src",
+        ),
+        # Restart the process to pick up the changed files.
+        restart_container(),
+    ],
+)
+
+docker_build(
+    ref="registry.localhost/labs/data-processor:latest",
+    context="../../services/pipeline/data-processor",
+    dockerfile="../../services/pipeline/data-processor/data-processor.dockerfile",
+    build_args=common_build_args,
+    target="dev",
+    live_update=[
+        sync(
+            "../../services/pipeline/data-processor/src",
+            "/workspace/src",
+        ),
+        # Restart the process to pick up the changed files.
+        restart_container(),
+    ],
+)
+
+docker_build(
+    ref="registry.localhost/labs/franka-robot:latest",
+    context="../../services/actuators/franka-robot",
+    dockerfile="../../services/actuators/franka-robot/franka-robot.dockerfile",
+    build_args=common_build_args,
+    target="dev",
+    # No live_update: purely a C++ ROS 2 service. Any source changes require a full image rebuild.
+)
+
+docker_build(
+    ref="registry.localhost/labs/controller-coordinator:latest",
+    context="../../services/actuators/controller-coordinator",
+    dockerfile="../../services/actuators/controller-coordinator/controller-coordinator.dockerfile",
+    build_args=common_build_args,
+    target="dev",
+    # No live_update: purely a C++ ROS 2 service. Any source changes require a full image rebuild.
+)
+
+docker_build(
+    ref="registry.localhost/labs/robotiq-gripper:latest",
+    context="../../services/actuators/robotiq-gripper",
+    dockerfile="../../services/actuators/robotiq-gripper/robotiq-gripper.dockerfile",
+    build_args=common_build_args,
+    target="dev",
+    # No live_update: purely a C++ ROS 2 service compiled at image build time.
+    # Any changes require a full image rebuild.
+)
+
+docker_build(
+    ref="registry.localhost/labs/zed-camera:latest",
+    context="../../services/sensors/zed-camera",
+    dockerfile="../../services/sensors/zed-camera/zed-camera.dockerfile",
+    build_args=common_build_args,
+    target="dev",
+    live_update=[
+        sync(
+            "../../services/sensors/zed-camera/src",
+            "/workspace/src",
+        ),
+        # Restart the process to pick up the changed files.
+        # NOTE: Only Python files in src/ benefit from live_update.
+        # C++ changes in the ZED ROS 2 wrapper or submodule commit updates will be synced but
+        # NOT recompiled — a full image rebuild is required for those.
+        restart_container(),
+    ],
+)
+
+docker_build(
+    ref="registry.localhost/labs/realsense-camera:latest",
+    context="../../services/sensors/realsense-camera",
+    dockerfile="../../services/sensors/realsense-camera/realsense-camera.dockerfile",
+    build_args=common_build_args,
+    target="dev",
+    live_update=[
+        sync(
+            "../../services/sensors/realsense-camera/src",
+            "/workspace/src",
+        ),
+        # Restart the process to pick up the changed files.
+        restart_container(),
+    ],
+)
+
+docker_build(
+    ref="registry.localhost/labs/data-collection-ui:latest",
+    context="../../services/pipeline/data-collection-ui",
+    dockerfile="../../services/pipeline/data-collection-ui/data-collection-ui.dockerfile",
+    build_args=common_build_args,
+    target="dev",
+    live_update=[
+        sync(
+            "../../services/pipeline/data-collection-ui/app",
+            "/workspace/app",
+        ),
+        # Restart the process to pick up the changed files.
+        # Not required due to Vite HMR
+        # restart_container(),
+    ],
+)
+
+# Resource groups in the Tilt sidebar
+dc_resource("migrate", labels=["pipeline"])
+dc_resource("postgres", labels=["pipeline"])
+dc_resource("data-collection", labels=["pipeline"])
+dc_resource("data-collection-ui", labels=["pipeline"])
+dc_resource("data-processor", labels=["pipeline"])
+dc_resource("data-recorder", labels=["pipeline"])
+dc_resource("realsense-camera-wrist", labels=["sensors"])
+dc_resource("zed-camera-head", labels=["sensors"])
+dc_resource("controller-coordinator", labels=["actuators"])
+dc_resource("franka-robot", labels=["actuators"])
+dc_resource("robotiq-gripper", labels=["actuators"])
+dc_resource("franka-gello", labels=["input"])

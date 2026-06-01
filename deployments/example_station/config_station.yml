@@ -1,0 +1,81 @@
+metadata:
+  station_id: example_station
+
+embodiment:
+  teleop_robots:
+    - id: left_arm
+      type: TELEOP_ROBOT
+      config:
+        namespace: left
+        ros_message_type: sensor_msgs/JointState
+        leader_topic: leader/gello/joint_states
+        leader_device: franka_gello
+        follower_topic: follower/gello/joint_states
+        follower_device: franka_fr3
+
+    - id: left_gripper
+      type: TELEOP_ROBOT
+      config:
+        namespace: left
+        ros_message_type: std_msgs/Float32
+        leader_topic: leader/gripper/gripper_client/target_gripper_width_percent
+        leader_device: franka_gello
+        follower_topic: follower/gripper/gripper_client/target_gripper_width_percent
+        follower_device: robotiq_2f_85
+
+    - id: right_arm
+      type: TELEOP_ROBOT
+      config:
+        namespace: right
+        ros_message_type: sensor_msgs/JointState
+        leader_topic: leader/gello/joint_states
+        leader_device: franka_gello
+        follower_topic: follower/gello/joint_states
+        follower_device: franka_fr3
+
+    - id: right_gripper
+      type: TELEOP_ROBOT
+      config:
+        namespace: right
+        ros_message_type: std_msgs/Float32
+        leader_topic: leader/gripper/gripper_client/target_gripper_width_percent
+        leader_device: franka_gello
+        follower_topic: follower/gripper/gripper_client/target_gripper_width_percent
+        follower_device: robotiq_2f_85
+
+  observer_devices:
+    - id: head
+      type: ZED_CAMERA
+      config:
+        rgb:
+          topic: /head_camera/zed_node/rgb/image_rect_color
+
+    - id: wrist_left
+      type: REALSENSE_CAMERA
+      config:
+        rgb:
+          topic: /wrist_camera_left/camera/color/image_raw
+
+    - id: wrist_right
+      type: REALSENSE_CAMERA
+      config:
+        rgb:
+          topic: /wrist_camera_right/camera/color/image_raw
+
+    - id: franka_robot_left
+      type: ROBOT_OBSERVER
+      config:
+        topics:
+          - /left/franka_robot_state_broadcaster/measured_joint_states
+          - /left/follower/gripper/joint_states
+          - /left/franka_robot_state_broadcaster/external_joint_torques
+          - /left/franka_robot_state_broadcaster/external_wrench_in_stiffness_frame
+
+    - id: franka_robot_right
+      type: ROBOT_OBSERVER
+      config:
+        topics:
+          - /right/franka_robot_state_broadcaster/measured_joint_states
+          - /right/follower/gripper/joint_states
+          - /right/franka_robot_state_broadcaster/external_joint_torques
+          - /right/franka_robot_state_broadcaster/external_wrench_in_stiffness_frame

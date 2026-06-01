@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CycloneDDS
+  xmlns="https://cdds.io/config"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="https://cdds.io/config https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.xsd"
+>
+  <Domain Id="any">
+    <General>
+      <!--
+      Limiting to localhost communication, since all nodes are expected to run on the same machine.
+      If this is not the case, change the address to the IP address of the host on the desired interface.
+      https://cyclonedds.io/docs/cyclonedds/latest/config/network_interfaces.html
+       -->
+      <Interfaces>
+        <NetworkInterface autodetermine="false" address="127.0.0.1"/>
+      </Interfaces>
+      <!-- https://www.stereolabs.com/docs/ros2/dds-and-network-tuning -->
+      <MaxMessageSize>65500B</MaxMessageSize>
+    </General>
+    <!-- Increase participant index range to not run into problems when nodes frequently restart -->
+    <Discovery>
+      <ParticipantIndex>auto</ParticipantIndex>
+      <MaxAutoParticipantIndex>10000</MaxAutoParticipantIndex>
+    </Discovery>
+    <Internal>
+      <!-- https://www.stereolabs.com/docs/ros2/dds-and-network-tuning -->
+      <SocketReceiveBufferSize min="10MB" />
+    </Internal>
+  </Domain>
+</CycloneDDS>

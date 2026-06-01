@@ -1,0 +1,17 @@
+services:
+  dataset-builder:
+    image: ${DOCKER_REGISTRY:-registry.localhost}/labs/dataset-builder:${DOCKER_TAG:-latest}
+    build:
+      context: .
+      dockerfile: dataset-builder.dockerfile
+      target: ${BUILD_TARGET:-dev}
+      args:
+        BUILD_TARGET: ${BUILD_TARGET:-dev}
+        BUILD_CREATED: ${BUILD_CREATED:-}
+        BUILD_VERSION: ${BUILD_VERSION:-}
+        GIT_COMMIT: ${GIT_COMMIT:-}
+    volumes:
+      - ${DATA_ROOT:-../../../data}:/workspace/data
+      - ${DEPLOYMENTS_ROOT:-../../../deployments}:/workspace/deployments
+    environment:
+      DISPLAY: ${DISPLAY}

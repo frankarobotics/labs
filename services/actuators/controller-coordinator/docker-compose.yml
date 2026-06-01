@@ -1,0 +1,20 @@
+services:
+  controller-coordinator:
+    image: ${DOCKER_REGISTRY:-registry.localhost}/labs/controller-coordinator:${DOCKER_TAG:-latest}
+    build:
+      context: .
+      dockerfile: controller-coordinator.dockerfile
+      target: ${BUILD_TARGET:-dev}
+      args:
+        BUILD_TARGET: ${BUILD_TARGET:-dev}
+        BUILD_CREATED: ${BUILD_CREATED:-}
+        BUILD_VERSION: ${BUILD_VERSION:-}
+        GIT_COMMIT: ${GIT_COMMIT:-}
+    container_name: controller-coordinator
+    network_mode: host
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    privileged: true
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
