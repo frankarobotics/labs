@@ -97,7 +97,7 @@ class ConversionMetadata(BaseModel):
     input_file: str
     output_file: str
     camera_topics: list[str]
-    av1_settings: dict[str, str | int]  # Contains preset, gop_size, pixel_format, threads
+    av1_settings: dict[str, str | int | list[int] | None]  # Contains preset, gop_size, pixel_format, threads, nice, cpu_affinity
     conversion_start_time: datetime
     conversion_end_time: datetime
     conversion_duration_seconds: float

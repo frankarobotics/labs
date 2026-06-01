@@ -4,7 +4,6 @@
 
 **L**earning & **A**cquisition of **B**ehaviors **S**uite
 
-**Version:** 0.1.0 (prototype release)
 See the [Changelog](CHANGELOG.md) for release details.
 
 ![Data Collection UI preview](docs/data-collection-ui-preview.gif)

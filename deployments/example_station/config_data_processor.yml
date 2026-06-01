@@ -14,6 +14,8 @@ data_processor:
   av1_gop_size: 2 # Keyframe frequency (2=LeRobot standard)
   av1_pixel_format: yuv420p # Color format
   av1_threads: 0 # 0=auto-detect (quarter of available CPU cores)
+  av1_nice: 19 # Process priority (0-19, 19=lowest)
+  av1_cpu_affinity: null # CPU core pinning (null=auto, uses upper quarter of cores)
 
   # If true, delete raw episode data after successful conversion
   delete_raw_episode: false

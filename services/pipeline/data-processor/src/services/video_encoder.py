@@ -1,6 +1,7 @@
 """Video Encoder component for H.264 encoding with FFmpeg integration."""
 
 import os
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -48,25 +49,40 @@ class VideoEncoder:
             # "libsvtav1" is the AV1 encoder, LeRobot standard for robotics datasets (better compression than H.264).
             "codec": "libsvtav1",
             # CPU thread limiting: reduce CPU usage by limiting threads
-            # 0 = auto (uses all cores), positive number = specific thread count
+            # 0 = auto, positive number = specific thread count
             # Set to quarter of available cores to leave CPU for other processes
             "threads": 0,  # Will be auto-calculated to use quarter CPU cores
+            # Nice value for the FFmpeg subprocess (0-19, higher = lower priority).
+            # 19 = lowest priority, ensuring other processes are not starved.
+            "nice": 19,
+            # CPU core affinity: list of core indices the encoder is allowed to use.
+            # None = auto (uses the upper quarter of cores).
+            # Example: [8, 9, 10, 11] pins encoding to cores 8-11 only.
+            "cpu_affinity": None,
         }
 
         # Merge with user settings
         self.codec_settings: dict[str, Any] = {**self.default_settings, **(codec_settings or {})}
 
         # Auto-calculate thread count if set to 0.
+        cpu_count: int = os.cpu_count() or 4  # Fallback to 4 if can't detect
         if self.codec_settings["threads"] == 0:
-            cpu_count: int = os.cpu_count() or 4  # Fallback to 4 if can't detect
-            self.codec_settings["threads"] = max(1, min(2, cpu_count // 4))
+            self.codec_settings["threads"] = max(1, cpu_count // 4)
+
+        # Auto-calculate CPU affinity if set to None.
+        if self.codec_settings["cpu_affinity"] is None:
+            num_encoder_cores = max(1, cpu_count // 4)
+            self.codec_settings["cpu_affinity"] = list(range(cpu_count - num_encoder_cores, cpu_count))
 
         # Temporary files for processing
         self.temp_files: list[Path] = []
 
         logger.info("Video Encoder initialized")
         logger.info(f"Codec settings: {self.codec_settings}")
-        logger.info(f"Using {self.codec_settings['threads']} threads (of {os.cpu_count()} available cores)")
+        logger.info(
+            f"Using {self.codec_settings['threads']} threads on cores {self.codec_settings['cpu_affinity']} "
+            f"(of {cpu_count} available) at nice {self.codec_settings['nice']}"
+        )
 
     def encode_frames(self, frames: list[dict[str, Any]], topic: str) -> tuple[bytes, dict[str, Any]]:
         """Encode frames to H.264 video using FFmpeg.
@@ -259,9 +275,32 @@ class VideoEncoder:
                 ).overwrite_output()
 
             try:
-                out, err = ffmpeg.run(output_stream, capture_stdout=True, capture_stderr=True, quiet=False)
-                logger.info(f"FFmpeg stdout: {out.decode() if out else 'None'}")
-                logger.info(f"FFmpeg stderr: {err.decode() if err else 'None'}")
+                cmd = ffmpeg.compile(output_stream)
+                nice_value = self.codec_settings["nice"]
+                affinity_cores = self.codec_settings["cpu_affinity"]
+
+                def _set_low_priority() -> None:
+                    """Pre-exec hook: lower priority & pin to designated cores."""
+                    try:
+                        os.nice(nice_value)
+                    except OSError:
+                        pass
+                    try:
+                        if affinity_cores:
+                            os.sched_setaffinity(0, affinity_cores)
+                    except OSError:
+                        pass
+
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    check=False,
+                    preexec_fn=_set_low_priority,
+                )
+                logger.info(f"FFmpeg stdout: {result.stdout.decode() if result.stdout else 'None'}")
+                logger.info(f"FFmpeg stderr: {result.stderr.decode() if result.stderr else 'None'}")
+                if result.returncode != 0:
+                    raise ffmpeg.Error("ffmpeg", result.stdout, result.stderr)
             except ffmpeg.Error as e:
                 logger.error(f"FFmpeg error: stdout={e.stdout.decode() if e.stdout else 'None'}")
                 logger.error(f"FFmpeg error: stderr={e.stderr.decode() if e.stderr else 'None'}")

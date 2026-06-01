@@ -243,6 +243,8 @@ class DataProcessor:
             "gop_size": self.config.av1_gop_size,
             "pixel_format": self.config.av1_pixel_format,
             "threads": self.config.av1_threads,
+            "nice": self.config.av1_nice,
+            "cpu_affinity": self.config.av1_cpu_affinity,
         }
 
         mcap_reader = None
