@@ -40,6 +40,10 @@
 - Increased GOP (Group of Pictures) size to 30 to improve compression efficiency and reduce processing time.
   The exported datasets remain having a GOP size of 2 for compatibility with LeRobot format.
 - Added `camera_info` topics to the data recorder configuration for all deployments to capture camera calibration data.
+- Introduced an `AUTORECOVERY` state in the controller coordinator and the workflow state machine.
+  When a controller dies during `READY`/`SYNCING`/`FOLLOWING`, the coordinator attempts to re-activate
+  the ready controller and returns to `READY`, falling back to `IDLE` on failure. The workflow mirrors
+  this across all coordinators. A toast notification is shown in the UI while recovery is in progress.
 
 ## [0.1.1] - 2026-06-01
 

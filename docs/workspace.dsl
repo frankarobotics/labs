@@ -75,7 +75,7 @@ workspace {
                 // NOTE: workflowSM and recordingSM are logical components of dataCollectionService,
                 // but are modelled as containers so that dedicated component views can be rendered for their state diagrams.
                 // They are excluded from DataCollection-Containers to avoid cluttering that view.
-                workflowSM = container "Workflow State Machine" "Manages robot lifecycle transitions: idle → ready → syncing → following (workflow.py)" "Python" {
+                workflowSM = container "Workflow State Machine" "Manages robot lifecycle transitions: idle → ready → syncing → following with autorecovery on controller loss (workflow.py)" "Python" {
                     tags "StateMachine"
 
                     wfIdle = component "IDLE" "System inactive, no robot controller running" "Python" {
@@ -90,12 +90,20 @@ workspace {
                     wfFollowing = component "FOLLOWING" "Robot following teleop device" "Python" {
                         tags "StateFollowing"
                     }
+                    wfAutorecovery = component "AUTORECOVERY" "A controller died; attempting to restore the ready controller" "Python" {
+                        tags "StateAutorecovery"
+                    }
                     wfIdle -> wfReady "get_ready"
                     wfReady -> wfSyncing "start_syncing"
-                    wfSyncing -> wfFollowing "start_teleop"
-                    wfFollowing -> wfReady "stop_teleop"
-                    wfSyncing -> wfReady "stop_teleop"
+                    wfSyncing -> wfFollowing "start_following"
+                    wfFollowing -> wfReady "get_ready"
+                    wfSyncing -> wfReady "get_ready"
                     wfReady -> wfIdle "get_idle"
+                    wfFollowing -> wfAutorecovery "start_autorecovery"
+                    wfSyncing -> wfAutorecovery "start_autorecovery"
+                    wfReady -> wfAutorecovery "start_autorecovery"
+                    wfAutorecovery -> wfReady "get_ready (recovery ok)"
+                    wfAutorecovery -> wfIdle "get_idle (recovery failed)"
                 }
 
                 recordingSM = container "Recording State Machine" "Manages per-episode recording lifecycle: idle → recording → reviewing (recording.py)" "Python" {
@@ -548,6 +556,11 @@ workspace {
             }
             element "StateFollowing" {
                 background #2e7d32
+                color #ffffff
+                shape RoundedBox
+            }
+            element "StateAutorecovery" {
+                background #c62828
                 color #ffffff
                 shape RoundedBox
             }

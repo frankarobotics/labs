@@ -68,6 +68,16 @@ class FrankaWorkflowStateMachine(BaseWorkflowStateMachine):
             logger.error(f"Failed to confirm IDLE state on controller coordinator (continuing to IDLE): {e}")
             raise
 
+    def after_start_autorecovery(self) -> None:
+        """Trigger all coordinators to autorecover.
+
+        Each coordinator will handle this according to its own state.
+        """
+        try:
+            self.robot_service.trigger_controller_coordinator("start_autorecovery")
+        except Exception as e:
+            logger.error(f"Failed to trigger autorecover: {e}")
+
     def _on_follower_state_changed(self, namespace: str, state: str) -> None:
         """React to a follower state change by aligning the workflow state machine.
 
@@ -75,6 +85,7 @@ class FrankaWorkflowStateMachine(BaseWorkflowStateMachine):
         same state when any individual coordinator drops unexpectedly.
         Automatically transitions SYNCING -> FOLLOWING when all coordinators report FOLLOWING.
         """
+        # Normal syncing -> following promotion: wait for all coordinators before advancing.
         if self.current_state == self.syncing and state == "FOLLOWING":
             pending = {ns: s for ns, s in self.robot_service.controller_coordinator_states.items() if s != "FOLLOWING"}
             if not pending:
@@ -82,13 +93,42 @@ class FrankaWorkflowStateMachine(BaseWorkflowStateMachine):
                 self.start_following()
             else:
                 logger.info(f"Controller coordinator {namespace!r} is FOLLOWING, waiting for {list(pending.keys())}")
-        elif self.current_state in (self.following, self.syncing) and state == "READY":
-            logger.warning(f"Controller coordinator {namespace!r} dropped to READY, forcing workflow transition")
+
+        # A coordinator's operating controller died and it started autorecovery. Mirror that in
+        # the workflow immediately and fire get_ready on all other coordinators (fire-and-forget
+        # via on_start_autorecovery) so they leave FOLLOWING/SYNCING without blocking here.
+        elif self.current_state in (self.following, self.syncing, self.ready) and state == "AUTORECOVERY":
+            logger.warning(f"Controller coordinator {namespace!r} entered AUTORECOVERY, mirroring workflow state")
             try:
-                self.get_ready()
+                self.start_autorecovery()
             except Exception as e:
-                logger.error(f"Failed to recover workflow to READY after coordinator {namespace!r} dropped: {e}")
-        elif self.current_state in (self.ready, self.following, self.syncing) and state == "IDLE":
+                logger.error(
+                    f"Failed to enter AUTORECOVERY workflow state after coordinator {namespace!r} dropped: {e}"
+                )
+
+        # A coordinator reached READY (either via autorecovery or directly, e.g. due to a missed
+        # AUTORECOVERY message). Wait for all coordinators before transitioning the workflow, so
+        # we never broadcast get_ready while another coordinator is still in AUTORECOVERY.
+        elif self.current_state in (self.autorecovery, self.following, self.syncing) and state == "READY":
+            pending = {ns: s for ns, s in self.robot_service.controller_coordinator_states.items() if s != "READY"}
+            if pending:
+                logger.info(f"Controller coordinator {namespace!r} is READY, waiting for {list(pending.keys())}")
+            else:
+                logger.info("All controller coordinators are READY, transitioning workflow")
+                try:
+                    self.get_ready()
+                except Exception as e:
+                    logger.error(
+                        f"Failed to recover workflow to READY after coordinator {namespace!r} dropped: {e}. Escaping to IDLE."
+                    )
+                    try:
+                        self.get_idle()
+                    except Exception as idle_e:
+                        logger.error(f"Failed to escape to IDLE: {idle_e}")
+
+        # A coordinator dropped to IDLE (autorecovery failed, or stop was called externally).
+        # Force the entire workflow to IDLE regardless of other coordinators' states.
+        elif self.current_state in (self.ready, self.autorecovery, self.following, self.syncing) and state == "IDLE":
             logger.warning(f"Controller coordinator {namespace!r} dropped to IDLE, forcing workflow transition")
             try:
                 self.get_idle()

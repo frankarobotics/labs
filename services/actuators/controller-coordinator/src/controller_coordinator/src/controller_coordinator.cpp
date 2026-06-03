@@ -29,6 +29,8 @@ std::string to_string(CoordinatorState state) {
       return "SYNCING";
     case CoordinatorState::FOLLOWING:
       return "FOLLOWING";
+    case CoordinatorState::AUTORECOVERY:
+      return "AUTORECOVERY";
     default:
       return "UNKNOWN";
   }
@@ -81,17 +83,23 @@ void FrankaControllerCoordinator::declare_parameters() {
   this->declare_parameter("operating_controller", "operating_controller");
   this->declare_parameter("controller_manager_namespace", "/controller_manager");
   this->declare_parameter("monitor_rate_hz", 10.0);
-  this->declare_parameter("service_timeout_ms", 5000);
+  this->declare_parameter("service_timeout_ms",
+                           static_cast<int>(kDefaultServiceTimeout.count()));
+  this->declare_parameter("autorecovery_timeout_ms",
+                           static_cast<int>(kDefaultAutorecoveryTimeout.count()));
 
   ready_controller_name_ = this->get_parameter("ready_controller").as_string();
   operating_controller_name_ = this->get_parameter("operating_controller").as_string();
   controller_manager_namespace_ = this->get_parameter("controller_manager_namespace").as_string();
   monitor_rate_hz_ = this->get_parameter("monitor_rate_hz").as_double();
   service_timeout_ = std::chrono::milliseconds(this->get_parameter("service_timeout_ms").as_int());
+  autorecovery_timeout_ =
+      std::chrono::milliseconds(this->get_parameter("autorecovery_timeout_ms").as_int());
 
   RCLCPP_INFO(this->get_logger(), "Controller manager namespace: %s", controller_manager_namespace_.c_str());
   RCLCPP_INFO(this->get_logger(), "Ready controller: %s", ready_controller_name_.c_str());
   RCLCPP_INFO(this->get_logger(), "Operating controller: %s", operating_controller_name_.c_str());
+  RCLCPP_INFO(this->get_logger(), "Autorecovery timeout: %ld ms", autorecovery_timeout_.count());
 }
 
 void FrankaControllerCoordinator::initialize_service_clients() {
@@ -132,6 +140,11 @@ void FrankaControllerCoordinator::initialize_service_servers() {
   stop_service_ = this->create_service<std_srvs::srv::Trigger>(
       "~/stop", std::bind(&FrankaControllerCoordinator::handle_stop, this, std::placeholders::_1,
                           std::placeholders::_2),
+      rmw_qos_profile_services_default, service_callback_group_);
+
+  autorecover_service_ = this->create_service<std_srvs::srv::Trigger>(
+      "~/start_autorecovery", std::bind(&FrankaControllerCoordinator::handle_start_autorecovery, this,
+                                 std::placeholders::_1, std::placeholders::_2),
       rmw_qos_profile_services_default, service_callback_group_);
 }
 
@@ -181,20 +194,54 @@ void FrankaControllerCoordinator::handle_stop(
   RCLCPP_INFO(this->get_logger(), "%s", response->message.c_str());
 }
 
+void FrankaControllerCoordinator::handle_start_autorecovery(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request>,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+  std::lock_guard<std::mutex> lock(state_mutex_);
+
+  if (current_state_ == CoordinatorState::AUTORECOVERY ||
+      current_state_ == CoordinatorState::READY) {
+    // Already recovering or already at the target state — nothing to do.
+    response->success = true;
+    response->message = "Already in " + to_string(current_state_) + " state";
+    RCLCPP_DEBUG(this->get_logger(), "autorecover: %s", response->message.c_str());
+    return;
+  }
+
+  if (current_state_ == CoordinatorState::IDLE) {
+    response->success = false;
+    response->message = "Cannot autorecover from IDLE state";
+    RCLCPP_WARN(this->get_logger(), "%s", response->message.c_str());
+    return;
+  }
+
+  // FOLLOWING or SYNCING: enter AUTORECOVERY immediately and let the monitor
+  // handle the activation of the ready controller in its next cycle. We accept
+  // that the next cycle comes with a small delay, but it keeps the logic simpler.
+  RCLCPP_INFO(this->get_logger(), "autorecover requested from %s, entering AUTORECOVERY",
+              to_string(current_state_).c_str());
+  autorecovery_started_ = std::chrono::steady_clock::now();
+  current_state_ = CoordinatorState::AUTORECOVERY;
+  publish_state();
+  response->success = true;
+  response->message = "Entered AUTORECOVERY state";
+}
+
 bool FrankaControllerCoordinator::transition_to_ready() {
   std::unique_lock<std::mutex> lock(state_mutex_);
 
   if (current_state_ == CoordinatorState::READY) {
-    RCLCPP_INFO(this->get_logger(), "Already in READY state");
+    RCLCPP_DEBUG(this->get_logger(), "Already in READY state");
     return true;
   }
-  if (current_state_ != CoordinatorState::IDLE) {
-    RCLCPP_WARN(this->get_logger(), "Can only transition to READY from IDLE state. Current state: %s",
-                to_string(current_state_).c_str());
+
+  if (current_state_ == CoordinatorState::AUTORECOVERY) {
+    RCLCPP_INFO(this->get_logger(),
+                "get_ready called during AUTORECOVERY — recovery is already in progress.");
     return false;
   }
 
-  RCLCPP_INFO(this->get_logger(), "Transitioning IDLE -> READY");
+  RCLCPP_INFO(this->get_logger(), "Transitioning %s -> READY", to_string(current_state_).c_str());
 
   if (!switch_controller_client_->wait_for_service(service_timeout_) ||
       !list_controllers_client_->wait_for_service(service_timeout_)) {
@@ -202,18 +249,27 @@ bool FrankaControllerCoordinator::transition_to_ready() {
     return false;
   }
 
-  if (!wait_for_controller_loaded(ready_controller_name_)) {
-    return false;
-  }
-
-  auto already_active = is_controller_active(ready_controller_name_);
-  if (already_active.has_value() && already_active.value()) {
-    RCLCPP_INFO(this->get_logger(), "Ready controller '%s' is already active, skipping switch",
-                ready_controller_name_.c_str());
-  } else {
-    if (!switch_controllers({ready_controller_name_}, {})) {
-      RCLCPP_ERROR(this->get_logger(), "Failed to activate ready controller");
+  if (current_state_ == CoordinatorState::FOLLOWING ||
+      current_state_ == CoordinatorState::SYNCING) {
+    // Deactivate the operating controller and activate the ready controller.
+    if (!switch_controllers({ready_controller_name_}, {operating_controller_name_}, false)) {
+      RCLCPP_ERROR(this->get_logger(), "Failed to switch from operating to ready controller");
       return false;
+    }
+  } else {
+    if (!wait_for_controller_loaded(ready_controller_name_)) {
+      return false;
+    }
+
+    auto already_active = is_controller_active(ready_controller_name_);
+    if (already_active.has_value() && already_active.value()) {
+      RCLCPP_DEBUG(this->get_logger(), "Ready controller '%s' is already active, skipping switch",
+                  ready_controller_name_.c_str());
+    } else {
+      if (!switch_controllers({ready_controller_name_}, {})) {
+        RCLCPP_ERROR(this->get_logger(), "Failed to activate ready controller");
+        return false;
+      }
     }
   }
 
@@ -226,7 +282,7 @@ bool FrankaControllerCoordinator::transition_to_syncing() {
   std::unique_lock<std::mutex> lock(state_mutex_);
 
   if (current_state_ == CoordinatorState::SYNCING || current_state_ == CoordinatorState::FOLLOWING) {
-    RCLCPP_INFO(this->get_logger(), "Already in %s state", to_string(current_state_).c_str());
+    RCLCPP_DEBUG(this->get_logger(), "Already in %s state", to_string(current_state_).c_str());
     return true;
   }
   if (current_state_ != CoordinatorState::READY) {
@@ -280,16 +336,19 @@ bool FrankaControllerCoordinator::transition_to_idle() {
   std::unique_lock<std::mutex> lock(state_mutex_);
 
   if (current_state_ == CoordinatorState::IDLE) {
-    RCLCPP_INFO(this->get_logger(), "Already in IDLE state");
+    RCLCPP_DEBUG(this->get_logger(), "Already in IDLE state");
     return true;
   }
 
   RCLCPP_INFO(this->get_logger(), "Transitioning to IDLE");
 
   std::vector<std::string> deactivate_controllers;
-  if (current_state_ == CoordinatorState::READY) {
+  
+  if (current_state_ == CoordinatorState::READY ||
+      current_state_ == CoordinatorState::SYNCING ||
+      current_state_ == CoordinatorState::FOLLOWING ||
+      current_state_ == CoordinatorState::AUTORECOVERY) {
     deactivate_controllers.push_back(ready_controller_name_);
-  } else if (current_state_ == CoordinatorState::SYNCING || current_state_ == CoordinatorState::FOLLOWING) {
     deactivate_controllers.push_back(operating_controller_name_);
   }
 
@@ -313,18 +372,27 @@ bool FrankaControllerCoordinator::transition_to_idle() {
   return true;
 }
 
-bool FrankaControllerCoordinator::transition_following_to_ready() {
-  RCLCPP_INFO(this->get_logger(), "Transitioning to READY from %s", to_string(current_state_).c_str());
+bool FrankaControllerCoordinator::transition_autorecovery_to_ready() {
+  RCLCPP_INFO(this->get_logger(),
+              "Autorecovery: activating '%s', deactivating '%s'",
+              ready_controller_name_.c_str(), operating_controller_name_.c_str());
+
+  if (!wait_for_controller_loaded(ready_controller_name_, autorecovery_timeout_)) {
+    RCLCPP_ERROR(this->get_logger(), "Autorecovery: ready controller '%s' was not loaded in time",
+                 ready_controller_name_.c_str());
+    return false;
+  }
 
   std::lock_guard<std::mutex> lock(state_mutex_);
 
   if (!switch_controllers({ready_controller_name_}, {operating_controller_name_}, false)) {
-    RCLCPP_ERROR(this->get_logger(), "Failed to switch back to ready controller");
+    RCLCPP_ERROR(this->get_logger(), "Autorecovery failed: could not activate ready controller");
     return false;
   }
 
   current_state_ = CoordinatorState::READY;
   publish_state();
+  RCLCPP_INFO(this->get_logger(), "Autorecovery succeeded: back in READY state");
   return true;
 }
 
@@ -337,7 +405,7 @@ bool FrankaControllerCoordinator::switch_controllers(
   request->deactivate_controllers = deactivate_controllers;
   request->strictness = strict ? 2 : 1;
   request->activate_asap = true;
-  request->timeout = rclcpp::Duration(5, 0);
+  request->timeout = rclcpp::Duration(kSwitchControllerHardwareTimeout);
 
   auto future = switch_controller_client_->async_send_request(request);
 
@@ -374,11 +442,12 @@ std::optional<bool> FrankaControllerCoordinator::is_controller_active(const std:
   return false;  // Confirmed not present / not active
 }
 
-bool FrankaControllerCoordinator::is_controller_loaded(const std::string& controller_name) {
+bool FrankaControllerCoordinator::is_controller_loaded(const std::string& controller_name,
+                                                         std::chrono::milliseconds timeout) {
   auto request = std::make_shared<controller_manager_msgs::srv::ListControllers::Request>();
   auto future = list_controllers_client_->async_send_request(request);
 
-  if (future.wait_for(service_timeout_) != std::future_status::ready) {
+  if (future.wait_for(timeout) != std::future_status::ready) {
     RCLCPP_WARN(this->get_logger(), "List controllers service call timed out");
     return false;
   }
@@ -392,15 +461,17 @@ bool FrankaControllerCoordinator::is_controller_loaded(const std::string& contro
   return false;
 }
 
-bool FrankaControllerCoordinator::wait_for_controller_loaded(const std::string& controller_name) {
+bool FrankaControllerCoordinator::wait_for_controller_loaded(
+    const std::string& controller_name, std::chrono::milliseconds total_timeout) {
   RCLCPP_INFO(this->get_logger(), "Waiting for controller '%s' to be loaded...", controller_name.c_str());
-  auto deadline = std::chrono::steady_clock::now() + service_timeout_;
+  // Use a short per-call timeout so multiple retries fit within the total budget.
+  auto deadline = std::chrono::steady_clock::now() + total_timeout;
   while (std::chrono::steady_clock::now() < deadline) {
-    if (is_controller_loaded(controller_name)) {
+    if (is_controller_loaded(controller_name, kControllerLoadPerCallTimeout)) {
       RCLCPP_INFO(this->get_logger(), "Controller '%s' is loaded", controller_name.c_str());
       return true;
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::this_thread::sleep_for(kControllerLoadPollInterval);
   }
   RCLCPP_ERROR(this->get_logger(), "Timed out waiting for controller '%s' to be loaded", controller_name.c_str());
   return false;
@@ -411,6 +482,27 @@ bool FrankaControllerCoordinator::is_controller_manager_available(
   auto request = std::make_shared<controller_manager_msgs::srv::ListControllers::Request>();
   auto future = list_controllers_client_->async_send_request(request);
   return future.wait_for(probe_timeout) == std::future_status::ready;
+}
+
+void FrankaControllerCoordinator::monitor_autorecovery_cycle() {
+  if (std::chrono::steady_clock::now() - *autorecovery_started_ > autorecovery_timeout_) {
+    RCLCPP_ERROR(this->get_logger(),
+                 "Autorecovery timed out after %ld ms, transitioning to IDLE",
+                 autorecovery_timeout_.count());
+    transition_to_idle();
+    return;
+  }
+  if (!is_controller_manager_available()) {
+    RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                         "Autorecovery: waiting for controller manager to become available...");
+    return;
+  }
+  RCLCPP_INFO(this->get_logger(),
+              "Autorecovery: controller manager is available, attempting recovery");
+  if (!transition_autorecovery_to_ready()) {
+    RCLCPP_ERROR(this->get_logger(), "Autorecovery failed, transitioning to IDLE");
+    transition_to_idle();
+  }
 }
 
 void FrankaControllerCoordinator::monitor_operating_controller() {
@@ -429,46 +521,64 @@ void FrankaControllerCoordinator::monitor_operating_controller() {
     return;
   }
 
+  // We might be in AUTORECOVERY already due to a Controller Manager unavailability detected in the
+  // previous cycle. Check if we can recover or if we should time out and drop to IDLE.
+  if (state == CoordinatorState::AUTORECOVERY) {
+    monitor_autorecovery_cycle();
+    return;
+  }
+
+  // When the Controller Manager becomes unavailable, we enter AUTORECOVERY. The next monitor cycles will
+  // check if it has come back up and attempt to recover back to READY or time out and drop to IDLE.
   if (!is_controller_manager_available()) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     if (current_state_ != state) {
       return;
     }
-    RCLCPP_ERROR(this->get_logger(), "Controller manager is not available, transitioning to IDLE");
-    current_state_ = CoordinatorState::IDLE;
+    RCLCPP_WARN(this->get_logger(),
+                "Controller manager unavailable, entering AUTORECOVERY (from %s)",
+                to_string(state).c_str());
+    autorecovery_started_ = std::chrono::steady_clock::now();
+    current_state_ = CoordinatorState::AUTORECOVERY;
     publish_state();
     return;
   }
 
+  // Active controller health check
   const std::string& controller_to_check =
       (state == CoordinatorState::READY) ? ready_controller_name_ : operating_controller_name_;
-
   auto active = is_controller_active(controller_to_check);
-
   {
     std::lock_guard<std::mutex> lock(state_mutex_);
     if (current_state_ != state) {
       return;
     }
   }
-
   if (!active.has_value()) {
     return;  // Timeout — uncertain, skip this cycle
   }
-
   if (active.value()) {
     return;  // Controller is healthy, nothing to do
   }
 
-  if (state == CoordinatorState::READY) {
-    RCLCPP_WARN(this->get_logger(), "Ready controller is not active, transitioning to IDLE");
-    transition_to_idle();
-  } else {
-    RCLCPP_WARN(this->get_logger(), "Operating controller is not active, transitioning to READY");
-    if (!transition_following_to_ready()) {
-      RCLCPP_ERROR(this->get_logger(), "Failed to transition to READY state after controller death");
-      transition_to_idle();
+  // When the Controller is not active but the Controller Manager is available we enter
+  // AUTORECOVERY and attempt to recover to READY or fall back to IDLE if that fails.
+  {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (current_state_ != state) {
+      return;
     }
+    RCLCPP_WARN(this->get_logger(),
+                "Controller '%s' is not active, entering AUTORECOVERY (from %s)",
+                controller_to_check.c_str(), to_string(state).c_str());
+    autorecovery_started_ = std::chrono::steady_clock::now();
+    current_state_ = CoordinatorState::AUTORECOVERY;
+    publish_state();
+  }
+
+  if (!transition_autorecovery_to_ready()) {
+    RCLCPP_ERROR(this->get_logger(), "Autorecovery failed, transitioning to IDLE");
+    transition_to_idle();
   }
 }
 
