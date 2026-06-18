@@ -5,10 +5,11 @@
 **Breaking Change**
 
 - **Removed PostgreSQL database** from the data-collection service to simplify the software stack:
-   * Episode management now solely relies on the `episode_metadata.json` files of the episodes in the data directory.
-   * Device status is now managed in memory.
+  - Episode management now solely relies on the `episode_metadata.json` files of the episodes in the data directory.
+  - Device status is now managed in memory.
 
   **Upgrade steps** (Delete database leftovers from existing deployments):
+
   > The episode metadata stored in the database is a subset of the information stored in
   > each episode's `episode_metadata.json` file. Unless you have manually modified
   > database records after they were written, the database can be safely removed without

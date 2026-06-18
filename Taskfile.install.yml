@@ -1,7 +1,6 @@
 version: '3'
 
 vars:
-  GO_VERSION: 1.25.0
   JQ_VERSION: 1.8.0
   NODE_VERSION: 24
   RUFF_VERSION: 0.12.1
@@ -11,32 +10,6 @@ vars:
   YQ_VERSION: 4.45.4
 
 tasks:
-  go:
-    desc: Install Go
-    dir: /tmp/temp
-    cmds:
-      - |
-        # Check if already installed with correct version
-        if command -v go &> /dev/null; then
-          INSTALLED_VERSION=$(go version 2>&1 | grep -oP '{{.GO_VERSION}}' || echo "")
-          if [[ "$INSTALLED_VERSION" == "{{.GO_VERSION}}" ]]; then
-            echo "go {{.GO_VERSION}} already installed"
-            exit 0
-          fi
-        fi
-
-        # Install
-        rm -rf /tmp/temp/*
-        if [[ "$CI" == 1 ]];then
-          echo ""
-        else
-          mkdir -p ~/.local/bin
-          wget https://go.dev/dl/go{{.GO_VERSION}}.linux-amd64.tar.gz
-          tar -C ~/.local -xzf go{{.GO_VERSION}}.linux-amd64.tar.gz
-          echo 'export PATH=$PATH:~/.local/go/bin' >> ~/.bashrc
-          echo "Go version: $(~/.local/go/bin/go version)"
-        fi
-
   jq:
     desc: Install jq
     dir: /tmp/temp
@@ -213,7 +186,6 @@ tasks:
   dependencies:
     desc: Install dependencies
     cmds:
-      - task: go
       - task: jq
       - task: uv
       - task: ruff

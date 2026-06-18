@@ -1,34 +1,19 @@
 """Device monitor for tracking and managing device states.
 
-The DeviceMonitor handles robust ROS-based device monitoring with automatic recovery from
-ROS context invalidation. It accepts a `repo_factory: Callable[[Session], DeviceRepo]` and
-the worker creates a DB session with `with SessionLocal() as db:` then calls
-`repo = self._repo_factory(db)`.
+The DeviceMonitor uses an in-memory DeviceRepo and updates device statuses based on
+ROS topic availability. The DeviceRepo is populated from the StationConfig at startup.
 
 Key Features:
  - Automatic ROS node context validation and recovery
  - Graceful handling of ROS shutdown scenarios
  - Robust error handling that prevents monitor loop crashes
  - Proper resource cleanup without interfering with other ROS components
-
-Reasoning:
- - The repo factory decouples the monitor from concrete repo implementations and makes unit
-   testing easier (tests can inject test/mocked repo factories).
- - The worker creates the SQLAlchemy `Session` (via `SessionLocal`) in-thread so the session
-   lifecycle (commit/rollback/close) is owned by the worker thread. SQLAlchemy Sessions are
-   not thread-safe; creating the session inside the worker avoids accidental cross-thread reuse.
- - The factory expects a `Session` argument so the worker and factory have distinct
-   responsibilities: worker manages session lifecycle, factory produces a repo bound to that
-   session.
- - ROS node context validation prevents "rcl node's context is invalid" errors during shutdown
-   or when ROS components are restarted.
 """
 
 from __future__ import annotations
 
 import threading
 import time
-from collections.abc import Callable
 from datetime import UTC, datetime
 
 import rclpy
@@ -36,7 +21,6 @@ from fastapi import FastAPI
 from loguru import logger
 from rclpy.node import Node
 from rclpy.topic_endpoint_info import TopicEndpointInfo
-from sqlalchemy.orm import Session
 
 from configs.data_collection import DataCollectionConfig
 from configs.station import (
@@ -48,39 +32,37 @@ from configs.station import (
     TeleopRobotConfig,
     ZedCameraConfig,
 )
-from db import SessionLocal
 from helpers.rclpy_guard import safe_init
-from models.db import DeviceDB, DeviceStatusDB, DeviceTypeDB
-from repos.devices import DeviceRepo
+from models.device import DeviceStatus, DeviceType
+from repos.devices import DeviceRecord, DeviceRepo
 
 
 class DeviceMonitor:
     """Device monitor lifecycle and thread with robust ROS integration.
 
     Responsibilities:
-    - Sync devices from `configs.station` into the DB on start
+    - Sync devices from `configs.station` into the in-memory DeviceRepo on start
     - Periodically check ROS topics and update device status with automatic recovery
     - Handle ROS node context invalidation gracefully during shutdown scenarios
     - Provide start/stop methods for integration with FastAPI lifespan
-    - Ensure thread-safe resource management without interfering with other ROS components
     """
 
     def __init__(
         self,
         config: DataCollectionConfig,
         station_config: StationConfig,
-        repo_factory: Callable[[Session], DeviceRepo],
+        device_repo: DeviceRepo,
     ) -> None:
         """Create a DeviceMonitor.
 
         Args:
             config: Data collection config
             station_config: Station config
-            repo_factory: Callable that accepts a SQLAlchemy Session and returns a DeviceRepo
+            device_repo: Shared in-memory device repository to read and update
         """
         self.config: DataCollectionConfig = config
         self.station_config: StationConfig = station_config
-        self._repo_factory: Callable[[Session], DeviceRepo] = repo_factory
+        self._device_repo: DeviceRepo = device_repo
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._node: Node | None = None
@@ -107,11 +89,11 @@ class DeviceMonitor:
             logger.exception("Failed to initialize rclpy for device monitoring: {}", e)
             raise
 
-    def get_configured_topics(self, device: DeviceDB) -> list[str]:
+    def get_configured_topics(self, device: DeviceRecord) -> list[str]:
         """Get the list of ROS topics for a given device based on its type and configuration.
 
         Args:
-            device: Device database model containing type and configuration
+            device: Device record containing type and configuration
 
         Returns:
             List of ROS topic names that should be monitored for this device
@@ -119,13 +101,13 @@ class DeviceMonitor:
         Raises:
             NotImplementedError: If the device type is not supported
         """
-        if device.type == DeviceTypeDB.TELEOP_ROBOT:
+        if device.type == DeviceType.TELEOP_ROBOT:
             return self._topics_for_teleop(TeleopRobotConfig.model_validate(device.config))
-        if device.type == DeviceTypeDB.REALSENSE_CAMERA:
+        if device.type == DeviceType.REALSENSE_CAMERA:
             return self._topics_for_realsense(RealSenseCameraConfig.model_validate(device.config))
-        if device.type == DeviceTypeDB.ZED_CAMERA:
+        if device.type == DeviceType.ZED_CAMERA:
             return self._topics_for_zed(ZedCameraConfig.model_validate(device.config))
-        if device.type == DeviceTypeDB.ROBOT_OBSERVER:
+        if device.type == DeviceType.ROBOT_OBSERVER:
             return self._topics_for_robot_observer(RobotObserverConfig.model_validate(device.config))
         raise NotImplementedError(f"Unknown device type: {device.type}")
 
@@ -164,15 +146,15 @@ class DeviceMonitor:
             topics.extend(cfg.topics)
         return topics
 
-    def update_device_status(self, repo: DeviceRepo, device: DeviceDB, now: datetime) -> None:
-        """Update the status of a device based on ROS topic availability with robust error handling.
+    def update_device_status(self, repo: DeviceRepo, device: DeviceRecord, now: datetime) -> None:
+        """Update the in-memory status of a device based on ROS topic availability.
 
         This method checks if the device's configured ROS topics have active publishers,
         handling ROS context invalidation gracefully. If the ROS node context is invalid,
         the device is marked as offline rather than raising an exception.
 
         Args:
-            repo: Device repository for database operations
+            repo: In-memory device repository
             device: Device to check and update
             now: Current timestamp for updates
 
@@ -189,17 +171,17 @@ class DeviceMonitor:
             configured_topics: list[str] = self.get_configured_topics(device)
             if not configured_topics:
                 logger.warning(f"No configured topics for device {device.id}")
-                new_status = DeviceStatusDB.OFFLINE
+                new_status = DeviceStatus.OFFLINE
             else:
                 configured_topic: str = configured_topics[0]
 
                 # Check if rclpy and node context are valid before making ROS calls
                 if not rclpy.ok():  # type: ignore[attr-defined]
                     logger.debug("rclpy is not OK while updating device {}; marking offline", device.id)
-                    new_status = DeviceStatusDB.OFFLINE
+                    new_status = DeviceStatus.OFFLINE
                 elif self._node.context is None or not self._node.context.ok():
                     logger.debug("Node context is invalid for device {}; marking offline", device.id)
-                    new_status = DeviceStatusDB.OFFLINE
+                    new_status = DeviceStatus.OFFLINE
                 else:
                     try:
                         publishers: rclpy.List[TopicEndpointInfo] = self._node.get_publishers_info_by_topic(  # type: ignore[name-defined]
@@ -207,7 +189,7 @@ class DeviceMonitor:
                         )
                         if len(publishers) > 0:
                             is_online = True
-                        new_status = DeviceStatusDB.ONLINE if is_online else DeviceStatusDB.OFFLINE
+                        new_status = DeviceStatus.ONLINE if is_online else DeviceStatus.OFFLINE
                     except Exception as e_inner:
                         # Handle RCLError when rclpy/node context becomes invalid during shutdown.
                         # This is expected behavior and should not be treated as an error.
@@ -215,15 +197,14 @@ class DeviceMonitor:
                         logger.debug(
                             f"Ignoring rclpy error while checking publishers for device {device.id}: {e_inner}"
                         )
-                        new_status = DeviceStatusDB.OFFLINE
+                        new_status = DeviceStatus.OFFLINE
 
             if device.status != new_status:
                 logger.info(f"Device {device.id} status change {device.status} -> {new_status}")
-                device.status = new_status
+            device.status = new_status
             if is_online:
                 device.last_heartbeat = now
             device.updated_at = now
-            repo.db.add(device)
         except Exception:
             # Protect the monitor loop from dying on unexpected errors that are not
             # related to ROS context issues. Log full exception with stack trace and
@@ -235,8 +216,7 @@ class DeviceMonitor:
         """Check if the ROS node and context are valid and can be used for ROS operations.
 
         Returns:
-            True if the node exists and both rclpy and node context are valid,
-            False otherwise
+            True if the node exists and both rclpy and node context are valid, False otherwise
         """
         return (
             self._node is not None
@@ -290,7 +270,7 @@ class DeviceMonitor:
         4. Handles graceful shutdown when stop event is set
 
         Args:
-            repo: Device repository for database operations
+            repo: Device repository
             interval_sec: Sleep interval between monitoring cycles
 
         Note:
@@ -303,22 +283,19 @@ class DeviceMonitor:
                 # Check if we need to reinitialize the node for robust ROS connectivity
                 if not self._ensure_valid_node():
                     logger.warning("Cannot ensure valid ROS node; marking all devices offline")
-                    devices: list[DeviceDB] = list(repo.get_all())
+                    devices: list[DeviceRecord] = repo.get_all()
                     now: datetime = datetime.now(UTC)
                     for device in devices:
-                        if device.status != DeviceStatusDB.OFFLINE:
-                            logger.info(f"Device {device.id} status change {device.status} -> {DeviceStatusDB.OFFLINE}")
-                            device.status = DeviceStatusDB.OFFLINE
-                            device.updated_at = now
-                            repo.db.add(device)
+                        if device.status != DeviceStatus.OFFLINE:
+                            logger.info(f"Device {device.id} status change {device.status} -> {DeviceStatus.OFFLINE}")
+                        device.status = DeviceStatus.OFFLINE
+                        device.updated_at = now
                 else:
                     # Normal monitoring path when ROS node is healthy
-                    devices = list(repo.get_all())
+                    devices = repo.get_all()
                     now = datetime.now(UTC)
                     for d in devices:
                         self.update_device_status(repo, d, now)
-
-                repo.db.commit()
 
                 # Sleep in short intervals so shutdown is responsive
                 slept = 0.0
@@ -338,41 +315,41 @@ class DeviceMonitor:
             except Exception as e:
                 logger.error("Error during node cleanup in device monitor: {}", e)
 
-    def _sync_config_to_db(self, repo: DeviceRepo) -> None:
-        """Synchronize station configuration devices to the database.
+    def _sync_config_to_repo(self, repo: DeviceRepo) -> None:
+        """Populate the in-memory DeviceRepo from the station configuration.
 
         This method reads the station configuration and ensures all configured
-        devices (teleop robots and observer devices) are present in the database
+        devices (teleop robots and observer devices) are present in the repo
         with UNKNOWN status initially.
 
         Args:
-            repo: Device repository for database operations
+            repo: In-memory device repository
         """
         teleop_robots: list[TeleopRobot] = self.station_config.embodiment.teleop_robots or []
         for teleop_robot in teleop_robots:
             repo.upsert(
                 device_id=teleop_robot.id,
                 device_type=teleop_robot.type,
-                status=DeviceStatusDB.UNKNOWN,
+                status=DeviceStatus.UNKNOWN,
                 config=teleop_robot.config.model_dump(),
             )
-            logger.debug("Upserted teleop robot {} into DB", teleop_robot.id)
+            logger.debug("Added teleop robot {} to device store", teleop_robot.id)
 
         observer_devices: list[ObserverDevice] = self.station_config.embodiment.observer_devices or []
         for observer_device in observer_devices:
             repo.upsert(
                 device_id=observer_device.id,
                 device_type=observer_device.type,
-                status=DeviceStatusDB.UNKNOWN,
+                status=DeviceStatus.UNKNOWN,
                 config=observer_device.config.model_dump(),
             )
-            logger.debug("Upserted observer device {} into DB", observer_device.id)
+            logger.debug("Added observer device {} to device store", observer_device.id)
 
     def start(self, app: FastAPI) -> None:
         """Start the device monitor in a background thread and attach to app.state.
 
         This method creates and starts a daemon thread that will:
-        1. Initialize the database with configured devices
+        1. Sync the station config into the in-memory device repo
         2. Start the monitoring loop with ROS node recovery
         3. Store monitor references on app.state for external access
 
@@ -390,21 +367,19 @@ class DeviceMonitor:
 
         def worker() -> None:
             logger.info("Device monitor thread starting up")
-            with SessionLocal() as db:
-                logger.debug(f"Loaded data collection config: {self.config}")
-                logger.debug(f"Loaded station config: {self.station_config}")
+            logger.debug(f"Loaded data collection config: {self.config}")
+            logger.debug(f"Loaded station config: {self.station_config}")
 
-                # Create a repo using the provided factory so callers can control repo/session lifecycle
-                repo: DeviceRepo = self._repo_factory(db)
+            repo = self._device_repo
 
-                logger.info("Clearing devices table")
-                repo.delete_all()
+            logger.info("Clearing device store")
+            repo.delete_all()
 
-                logger.info("Syncing station config to DB")
-                self._sync_config_to_db(repo)
+            logger.info("Syncing station config to device store")
+            self._sync_config_to_repo(repo)
 
-                logger.info("Starting monitor loop")
-                self.monitor_loop(repo, self.config.device_status_poll_interval_sec)
+            logger.info("Starting monitor loop")
+            self.monitor_loop(repo, self.config.device_status_poll_interval_sec)
 
         self._thread = threading.Thread(target=worker, name="device-monitor", daemon=True)
         app.state.device_monitor_instance = self

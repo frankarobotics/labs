@@ -571,6 +571,12 @@ export interface components {
             message: string;
         };
         /**
+         * EpisodeLabel
+         * @description Enumeration of labels for an episode.
+         * @enum {string}
+         */
+        EpisodeLabel: "REVIEW_SUCCESS" | "REVIEW_FAILED";
+        /**
          * EpisodePatchRequest
          * @description Request model used to patch episode fields (processed and message).
          */
@@ -716,12 +722,6 @@ export interface components {
             station_id: string;
             active_episode?: components["schemas"]["ActiveEpisode"] | null;
         };
-        /**
-         * EpisodeLabel
-         * @description Enumeration of labels for an episode.
-         * @enum {string}
-         */
-        EpisodeLabel: "REVIEW_SUCCESS" | "REVIEW_FAILED";
         /**
          * TaskResponse
          * @description Response model for tasks.
