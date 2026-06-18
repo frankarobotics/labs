@@ -25,21 +25,6 @@ common_build_args = {"BUILD_TARGET": "dev", "BUILD_VERSION": git_commit, "GIT_CO
 
 # Docker builds
 docker_build(
-    ref="registry.localhost/labs/migrate:latest",
-    context="../../services/pipeline/migrate",
-    dockerfile="../../services/pipeline/migrate/migrate.dockerfile",
-    build_args=common_build_args,
-    target="dev",
-    live_update=[
-        sync(
-            "../../services/pipeline/migrate/migrations",
-            "/workspace/migrations",
-        ),
-        # No restart needed, one-shot job
-    ],
-)
-
-docker_build(
     ref="registry.localhost/labs/data-collection:latest",
     context="../../services/pipeline/data-collection",
     dockerfile="../../services/pipeline/data-collection/data-collection.dockerfile",
@@ -184,8 +169,6 @@ docker_build(
 )
 
 # Resource groups in the Tilt sidebar
-dc_resource("migrate", labels=["pipeline"])
-dc_resource("postgres", labels=["pipeline"])
 dc_resource("data-collection", labels=["pipeline"])
 dc_resource("data-collection-ui", labels=["pipeline"])
 dc_resource("data-processor", labels=["pipeline"])

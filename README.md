@@ -28,7 +28,6 @@ For a detailed architecture diagram, see the [Architecture Diagram](docs/labs-ar
 - FastAPI + Uvicorn ASGI server with async/await
 - Python (service-dependent: 3.10+ and 3.12+) with `uv` package manager
 - ROS 2 (primarily Jazzy, also Humble)
-- PostgreSQL for metadata persistence via async SQLAlchemy
 - Recording/export via `ros2 bag` in MCAP format
 - Dataset export format: LeRobot v2.1
 - Media processing: FFmpeg-based video encoding and Foxglove-compatible artifacts
@@ -76,7 +75,7 @@ The LABS stack orchestrates data collection, recording, and processing through t
 - **Data Recorder** (`services/pipeline/data-recorder/`) — ROS 2 topic capture to MCAP format, see also [Data Recorder README](services/pipeline/data-recorder/README.md).
 - **Data Processor** (`services/pipeline/data-processor/`) — Post-processing and transformation of collected data and conversion utilities, see also [Data Processor README](services/pipeline/data-processor/README.md).
 
-Additional services include hardware drivers for above stated supported hardware, PostgreSQL for persistence, and the Data Collection UI (reference [Data Collection UI README](services/pipeline/data-collection-ui/README.md)).
+Additional services include hardware drivers for above stated supported hardware and the Data Collection UI (reference [Data Collection UI README](services/pipeline/data-collection-ui/README.md)).
 
 ## Getting Started
 
@@ -139,6 +138,7 @@ task start     # on first run Tilt builds all images automatically (this can tak
 ```
 
 > ℹ️ **Dashboards**:
+>
 > - Tilt http://localhost:10360/
 > - Data Collection UI http://localhost:4000/
 > - Swagger http://localhost:3001/docs
@@ -233,7 +233,6 @@ For service specific issues, please check each service's individual codebase and
 ## Known Limitations & Issues
 
 - No episode playback or management in data-collection UI.
-- Episode length in the episode list of the UI is incorrect.
 
 ## Contributing
 

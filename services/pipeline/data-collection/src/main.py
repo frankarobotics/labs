@@ -14,8 +14,8 @@ from configs.cors import CORSConfig, load_cors_config
 from configs.data_collection import DataCollectionConfig, load_data_collection_config
 from configs.logger import LoggerConfig, load_logger_config
 from configs.station import StationConfig, load_station_config
-from db import wait_for_db
 from dependencies import (
+    get_device_repo,
     get_robot_service,
     get_teleop_service,
     get_workflow_state_machine,
@@ -23,7 +23,6 @@ from dependencies import (
 from handlers import camera, devices, episode, health, recording, system, tasks, teleop
 from helpers.logging import setup_logging
 from helpers.rclpy_guard import is_initialized, safe_init, safe_shutdown
-from repos.devices import DeviceRepo
 from services.device_monitor import DeviceMonitor
 from services.franka_robot import FrankaRobotService
 from state_machine.franka_workflow import FrankaWorkflowStateMachine
@@ -37,8 +36,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     workflow_state_machine: FrankaWorkflowStateMachine = get_workflow_state_machine(robot_service=robot_service)
     get_teleop_service(state_machine=workflow_state_machine, robot_service=robot_service)
 
-    logger.info("Waiting for database to be available before startup")
-
     # Initialize ROS at lifespan startup
     try:
         safe_init()
@@ -47,14 +44,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.error("Failed to initialize rclpy during app startup: %s", e)
         raise
 
-    # Block until DB is available
-    wait_for_db()
-
     # Start thread for monitoring devices
-    logger.info("Database available, starting device monitor daemon thread")
+    logger.info("Starting device monitor daemon thread")
     config: DataCollectionConfig = load_data_collection_config()
     station_config: StationConfig = load_station_config()
-    monitor = DeviceMonitor(config, station_config, repo_factory=lambda db: DeviceRepo(db))
+    device_repo = get_device_repo()
+    monitor = DeviceMonitor(config, station_config, device_repo=device_repo)
     monitor.start(app)
 
     try:

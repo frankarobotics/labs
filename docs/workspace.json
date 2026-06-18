@@ -1,0 +1,2406 @@
+{
+  "configuration": {},
+  "description": "Teleoperation-based robot learning system based on Franka robots",
+  "documentation": {},
+  "id": 1,
+  "lastModifiedDate": "2026-06-10T10:16:20Z",
+  "model": {
+    "people": [
+      {
+        "description": "Human operator controlling the robot system and data recording workflow",
+        "id": "1",
+        "name": "Operator",
+        "properties": {
+          "structurizr.dsl.identifier": "user"
+        },
+        "relationships": [
+          {
+            "description": "Plans, labels, and monitors episodes",
+            "destinationId": "16",
+            "id": "65",
+            "sourceId": "1",
+            "tags": "Relationship"
+          },
+          {
+            "description": "Plans, labels, and monitors episodes",
+            "destinationId": "15",
+            "id": "66",
+            "linkedRelationshipId": "65",
+            "sourceId": "1"
+          },
+          {
+            "description": "Controls robot joint-based movements",
+            "destinationId": "3",
+            "id": "67",
+            "sourceId": "1",
+            "tags": "Relationship"
+          },
+          {
+            "description": "Controls robot joint-based movements",
+            "destinationId": "2",
+            "id": "68",
+            "linkedRelationshipId": "67",
+            "sourceId": "1"
+          },
+          {
+            "description": "Controls robot via custom interface",
+            "destinationId": "8",
+            "id": "69",
+            "sourceId": "1",
+            "tags": "Relationship"
+          },
+          {
+            "description": "Controls leader robot",
+            "destinationId": "6",
+            "id": "70",
+            "sourceId": "1",
+            "tags": "Relationship"
+          },
+          {
+            "description": "Sets station-specific configuration",
+            "destinationId": "43",
+            "id": "71",
+            "sourceId": "1",
+            "tags": "Relationship"
+          }
+        ],
+        "tags": "Element,Person"
+      }
+    ],
+    "softwareSystems": [
+      {
+        "containers": [
+          {
+            "description": "Physical wearable device",
+            "documentation": {},
+            "id": "3",
+            "name": "GELLO Hardware",
+            "properties": {
+              "structurizr.dsl.identifier": "gelloHardware"
+            },
+            "tags": "Element,Container,InputDevice",
+            "technology": "Haptic Device"
+          },
+          {
+            "description": "gello_software ROS driver",
+            "documentation": {},
+            "id": "4",
+            "name": "GELLO Software",
+            "properties": {
+              "structurizr.dsl.identifier": "gelloSoftware"
+            },
+            "tags": "Element,Container,ROSDriver",
+            "technology": "ROS 2/Python"
+          },
+          {
+            "description": "Single arm Franka FR3 used as leader",
+            "documentation": {},
+            "id": "5",
+            "name": "FR3 Leader Robot",
+            "properties": {
+              "structurizr.dsl.identifier": "fr3Leader"
+            },
+            "tags": "Element,Container,PhysicalRobot",
+            "technology": "Physical Robot"
+          },
+          {
+            "description": "Dual arm Franka FR3 leader",
+            "documentation": {},
+            "id": "6",
+            "name": "FR3 Leader Duo",
+            "properties": {
+              "structurizr.dsl.identifier": "fr3DuoLeader"
+            },
+            "tags": "Element,Container,PhysicalRobot",
+            "technology": "Physical Robot"
+          },
+          {
+            "description": "Leader control stack",
+            "documentation": {},
+            "id": "7",
+            "name": "fr3_ros2_teleop",
+            "properties": {
+              "structurizr.dsl.identifier": "fr3Teleop"
+            },
+            "tags": "Element,Container,ROSInterface",
+            "technology": "ROS 2"
+          },
+          {
+            "description": "Various teleoperation devices",
+            "documentation": {},
+            "id": "8",
+            "name": "Custom Hardware",
+            "properties": {
+              "structurizr.dsl.identifier": "teleopDevices"
+            },
+            "tags": "Element,Container,InputDevice",
+            "technology": "Hardware"
+          },
+          {
+            "description": "Device-specific ROS drivers",
+            "documentation": {},
+            "id": "9",
+            "name": "Specific Drivers",
+            "properties": {
+              "structurizr.dsl.identifier": "teleopDrivers"
+            },
+            "tags": "Element,Container,ROSDriver",
+            "technology": "ROS 2/Python"
+          }
+        ],
+        "description": "External control devices and their ROS interfaces",
+        "documentation": {},
+        "group": "LABS",
+        "id": "2",
+        "name": "Teleoperation Devices",
+        "properties": {
+          "structurizr.dsl.identifier": "teleopSystem"
+        },
+        "relationships": [
+          {
+            "description": "Publishes device states and commands",
+            "destinationId": "40",
+            "id": "79",
+            "sourceId": "2",
+            "tags": "Relationship"
+          },
+          {
+            "description": "Publishes device states and commands",
+            "destinationId": "15",
+            "id": "80",
+            "linkedRelationshipId": "79",
+            "sourceId": "2"
+          }
+        ],
+        "tags": "Element,Software System,TeleopDevice"
+      },
+      {
+        "containers": [
+          {
+            "description": "Primary vision sensor",
+            "documentation": {},
+            "id": "11",
+            "name": "Head Camera",
+            "properties": {
+              "structurizr.dsl.identifier": "headCamera"
+            },
+            "tags": "Element,Container,CameraHardware",
+            "technology": "Camera Hardware"
+          },
+          {
+            "description": "Cameras mounted on wrists",
+            "documentation": {},
+            "id": "12",
+            "name": "Wrist Cameras",
+            "properties": {
+              "structurizr.dsl.identifier": "wristCameras"
+            },
+            "tags": "Element,Container,CameraHardware",
+            "technology": "Camera Hardware"
+          },
+          {
+            "description": "Optional body camera for close-up views",
+            "documentation": {},
+            "id": "13",
+            "name": "Body Camera",
+            "properties": {
+              "structurizr.dsl.identifier": "bodyCamera"
+            },
+            "tags": "Element,Container,CameraHardware",
+            "technology": "Camera Hardware"
+          },
+          {
+            "description": "ROS drivers for camera feeds",
+            "documentation": {},
+            "id": "14",
+            "name": "Camera Drivers",
+            "properties": {
+              "structurizr.dsl.identifier": "cameraDrivers"
+            },
+            "relationships": [
+              {
+                "description": "Publishes camera feeds",
+                "destinationId": "40",
+                "id": "85",
+                "sourceId": "14",
+                "tags": "Relationship"
+              },
+              {
+                "description": "Publishes camera feeds",
+                "destinationId": "15",
+                "id": "86",
+                "linkedRelationshipId": "85",
+                "sourceId": "14"
+              },
+              {
+                "description": "Provides visual input",
+                "destinationId": "59",
+                "id": "122",
+                "sourceId": "14",
+                "tags": "Relationship"
+              },
+              {
+                "description": "Provides visual input",
+                "destinationId": "58",
+                "id": "123",
+                "linkedRelationshipId": "122",
+                "sourceId": "14"
+              },
+              {
+                "description": "Provides visual input",
+                "destinationId": "57",
+                "id": "124",
+                "linkedRelationshipId": "122",
+                "sourceId": "14"
+              }
+            ],
+            "tags": "Element,Container,ROSDriver",
+            "technology": "ROS 2/Python"
+          }
+        ],
+        "description": "Head, wrist, and environmental cameras with their ROS drivers",
+        "documentation": {},
+        "group": "LABS",
+        "id": "10",
+        "name": "Camera System",
+        "properties": {
+          "structurizr.dsl.identifier": "cameraSystem"
+        },
+        "relationships": [
+          {
+            "description": "Publishes camera feeds",
+            "destinationId": "40",
+            "id": "87",
+            "linkedRelationshipId": "85",
+            "sourceId": "10"
+          },
+          {
+            "description": "Publishes camera feeds",
+            "destinationId": "15",
+            "id": "88",
+            "linkedRelationshipId": "85",
+            "sourceId": "10"
+          },
+          {
+            "description": "Provides visual input",
+            "destinationId": "59",
+            "id": "125",
+            "linkedRelationshipId": "122",
+            "sourceId": "10"
+          },
+          {
+            "description": "Provides visual input",
+            "destinationId": "58",
+            "id": "126",
+            "linkedRelationshipId": "122",
+            "sourceId": "10"
+          },
+          {
+            "description": "Provides visual input",
+            "destinationId": "57",
+            "id": "127",
+            "linkedRelationshipId": "122",
+            "sourceId": "10"
+          }
+        ],
+        "tags": "Element,Software System,SensorSystem"
+      },
+      {
+        "containers": [
+          {
+            "description": "Dashboard for device health check monitoring, teleoperation, live camera streaming and session management",
+            "documentation": {},
+            "id": "16",
+            "name": "Data Collection UI",
+            "properties": {
+              "structurizr.dsl.identifier": "dataCollectionUI"
+            },
+            "relationships": [
+              {
+                "description": "Start/stop teleop and recording, assign tasks and episode management",
+                "destinationId": "17",
+                "id": "72",
+                "sourceId": "16",
+                "tags": "Relationship"
+              }
+            ],
+            "tags": "Element,Container,WebApp",
+            "technology": "React/Vite"
+          },
+          {
+            "components": [
+              {
+                "description": "FastAPI endpoints for tasks, devices, teleop",
+                "documentation": {},
+                "id": "18",
+                "name": "Episode & Teleop APIs",
+                "properties": {
+                  "structurizr.dsl.identifier": "episodeHandlers"
+                },
+                "tags": "Element,Component,Service",
+                "technology": "FastAPI"
+              },
+              {
+                "description": "Background ROS device/topic health monitor thread",
+                "documentation": {},
+                "id": "19",
+                "name": "Device Monitor",
+                "properties": {
+                  "structurizr.dsl.identifier": "deviceMonitor"
+                },
+                "tags": "Element,Component,Service",
+                "technology": "Python"
+              }
+            ],
+            "description": "FastAPI services that coordinates teleop workflow, device health, and recorder commands.",
+            "documentation": {},
+            "id": "17",
+            "name": "Data Collection Service",
+            "properties": {
+              "structurizr.dsl.identifier": "dataCollectionService"
+            },
+            "relationships": [
+              {
+                "description": "Streams live device health and episode event updates",
+                "destinationId": "16",
+                "id": "73",
+                "sourceId": "17",
+                "tags": "Relationship"
+              },
+              {
+                "description": "Loads station configuration",
+                "destinationId": "43",
+                "id": "74",
+                "sourceId": "17",
+                "tags": "Relationship"
+              },
+              {
+                "description": "Drives workflow transitions",
+                "destinationId": "20",
+                "id": "75",
+                "sourceId": "17",
+                "tags": "Relationship"
+              },
+              {
+                "description": "Drives recording transitions",
+                "destinationId": "31",
+                "id": "76",
+                "sourceId": "17",
+                "tags": "Relationship"
+              },
+              {
+                "description": "Start/stop recording via REST",
+                "destinationId": "40",
+                "id": "77",
+                "sourceId": "17",
+                "tags": "Relationship"
+              }
+            ],
+            "tags": "Element,Container,Service",
+            "technology": "FastAPI/Python"
+          },
+          {
+            "components": [
+              {
+                "description": "System inactive, no robot controller running",
+                "documentation": {},
+                "id": "21",
+                "name": "IDLE",
+                "properties": {
+                  "structurizr.dsl.identifier": "wfIdle"
+                },
+                "relationships": [
+                  {
+                    "description": "get_ready",
+                    "destinationId": "22",
+                    "id": "25",
+                    "sourceId": "21",
+                    "tags": "Relationship"
+                  }
+                ],
+                "tags": "Element,Component,StateIdle",
+                "technology": "Python"
+              },
+              {
+                "description": "Robot active but not accepting command input",
+                "documentation": {},
+                "id": "22",
+                "name": "READY",
+                "properties": {
+                  "structurizr.dsl.identifier": "wfReady"
+                },
+                "relationships": [
+                  {
+                    "description": "start_syncing",
+                    "destinationId": "23",
+                    "id": "26",
+                    "sourceId": "22",
+                    "tags": "Relationship"
+                  },
+                  {
+                    "description": "get_idle",
+                    "destinationId": "21",
+                    "id": "30",
+                    "sourceId": "22",
+                    "tags": "Relationship"
+                  }
+                ],
+                "tags": "Element,Component,StateReady",
+                "technology": "Python"
+              },
+              {
+                "description": "Robot aligning with teleop device pose",
+                "documentation": {},
+                "id": "23",
+                "name": "SYNCING",
+                "properties": {
+                  "structurizr.dsl.identifier": "wfSyncing"
+                },
+                "relationships": [
+                  {
+                    "description": "start_teleop",
+                    "destinationId": "24",
+                    "id": "27",
+                    "sourceId": "23",
+                    "tags": "Relationship"
+                  },
+                  {
+                    "description": "stop_teleop",
+                    "destinationId": "22",
+                    "id": "29",
+                    "sourceId": "23",
+                    "tags": "Relationship"
+                  }
+                ],
+                "tags": "Element,Component,StateSyncing",
+                "technology": "Python"
+              },
+              {
+                "description": "Robot following teleop device",
+                "documentation": {},
+                "id": "24",
+                "name": "FOLLOWING",
+                "properties": {
+                  "structurizr.dsl.identifier": "wfFollowing"
+                },
+                "relationships": [
+                  {
+                    "description": "stop_teleop",
+                    "destinationId": "22",
+                    "id": "28",
+                    "sourceId": "24",
+                    "tags": "Relationship"
+                  }
+                ],
+                "tags": "Element,Component,StateFollowing",
+                "technology": "Python"
+              }
+            ],
+            "description": "Manages robot lifecycle transitions: idle → ready → syncing → following (workflow.py)",
+            "documentation": {},
+            "id": "20",
+            "name": "Workflow State Machine",
+            "properties": {
+              "structurizr.dsl.identifier": "workflowSM"
+            },
+            "tags": "Element,Container,StateMachine",
+            "technology": "Python"
+          },
+          {
+            "components": [
+              {
+                "description": "Waiting for the operator to start a new episode recording",
+                "documentation": {},
+                "id": "32",
+                "name": "IDLE",
+                "properties": {
+                  "structurizr.dsl.identifier": "recIdle"
+                },
+                "relationships": [
+                  {
+                    "description": "start_recording",
+                    "destinationId": "33",
+                    "id": "35",
+                    "sourceId": "32",
+                    "tags": "Relationship"
+                  }
+                ],
+                "tags": "Element,Component,StateIdle",
+                "technology": "Python"
+              },
+              {
+                "description": "Capturing ROS topics in MCAP for the current episode",
+                "documentation": {},
+                "id": "33",
+                "name": "RECORDING",
+                "properties": {
+                  "structurizr.dsl.identifier": "recRecording"
+                },
+                "relationships": [
+                  {
+                    "description": "stop_recording",
+                    "destinationId": "34",
+                    "id": "36",
+                    "sourceId": "33",
+                    "tags": "Relationship"
+                  }
+                ],
+                "tags": "Element,Component,StateRecording",
+                "technology": "Python"
+              },
+              {
+                "description": "Episode recorded and waiting for label (success, failure, or deletion)",
+                "documentation": {},
+                "id": "34",
+                "name": "REVIEWING",
+                "properties": {
+                  "structurizr.dsl.identifier": "recReviewing"
+                },
+                "relationships": [
+                  {
+                    "description": "mark_success",
+                    "destinationId": "32",
+                    "id": "37",
+                    "sourceId": "34",
+                    "tags": "Relationship"
+                  },
+                  {
+                    "description": "mark_failure",
+                    "destinationId": "32",
+                    "id": "38",
+                    "sourceId": "34",
+                    "tags": "Relationship"
+                  },
+                  {
+                    "description": "delete",
+                    "destinationId": "32",
+                    "id": "39",
+                    "sourceId": "34",
+                    "tags": "Relationship"
+                  }
+                ],
+                "tags": "Element,Component,StateReviewing",
+                "technology": "Python"
+              }
+            ],
+            "description": "Manages per-episode recording lifecycle: idle → recording → reviewing (recording.py)",
+            "documentation": {},
+            "id": "31",
+            "name": "Recording State Machine",
+            "properties": {
+              "structurizr.dsl.identifier": "recordingSM"
+            },
+            "tags": "Element,Container,StateMachine",
+            "technology": "Python"
+          },
+          {
+            "description": "ROS 2 microservice for capturing and recording data streams to MCAP format",
+            "documentation": {},
+            "id": "40",
+            "name": "Data Recorder Service",
+            "properties": {
+              "structurizr.dsl.identifier": "dataRecorderService"
+            },
+            "relationships": [
+              {
+                "description": "Writes raw ROS 2 bag data",
+                "destinationId": "44",
+                "id": "89",
+                "sourceId": "40",
+                "tags": "Relationship"
+              }
+            ],
+            "tags": "Element,Container,Service",
+            "technology": "ROS 2/FastAPI"
+          },
+          {
+            "description": "Batch processing daemon for storage-efficient format conversion",
+            "documentation": {},
+            "id": "41",
+            "name": "Data Processor Service",
+            "properties": {
+              "structurizr.dsl.identifier": "dataProcessorService"
+            },
+            "relationships": [
+              {
+                "description": "Polls episode processed status",
+                "destinationId": "17",
+                "id": "78",
+                "sourceId": "41",
+                "tags": "Relationship"
+              },
+              {
+                "description": "Reads raw ROS 2 bag data",
+                "destinationId": "44",
+                "id": "90",
+                "sourceId": "41",
+                "tags": "Relationship"
+              },
+              {
+                "description": "Writes processed MCAP data",
+                "destinationId": "45",
+                "id": "91",
+                "sourceId": "41",
+                "tags": "Relationship"
+              }
+            ],
+            "tags": "Element,Container,Service",
+            "technology": "Python"
+          },
+          {
+            "description": "Export tooling to specific format (e.g., LeRobot)",
+            "documentation": {},
+            "id": "42",
+            "name": "Dataset Builder",
+            "properties": {
+              "structurizr.dsl.identifier": "datasetBuilder"
+            },
+            "relationships": [
+              {
+                "description": "Reads processed episodes",
+                "destinationId": "45",
+                "id": "92",
+                "sourceId": "42",
+                "tags": "Relationship"
+              },
+              {
+                "description": "Uploads formatted datasets",
+                "destinationId": "54",
+                "id": "93",
+                "sourceId": "42",
+                "tags": "Relationship"
+              },
+              {
+                "description": "Uploads formatted datasets",
+                "destinationId": "53",
+                "id": "94",
+                "linkedRelationshipId": "93",
+                "sourceId": "42"
+              },
+              {
+                "description": "Publishes public dataset releases",
+                "destinationId": "56",
+                "id": "97",
+                "sourceId": "42",
+                "tags": "Relationship"
+              }
+            ],
+            "tags": "Element,Container,Tooling",
+            "technology": "Python CLI"
+          },
+          {
+            "description": "Configuration files for the robot, cameras, teleoperation devices and collected task",
+            "documentation": {},
+            "id": "43",
+            "name": "Station Config & Metadata",
+            "properties": {
+              "structurizr.dsl.identifier": "stationConfig"
+            },
+            "tags": "Element,Container,Config",
+            "technology": "YAML/JSON"
+          },
+          {
+            "description": "Raw data based on ROS 2 bags",
+            "documentation": {},
+            "id": "44",
+            "name": "Raw Episode Storage",
+            "properties": {
+              "structurizr.dsl.identifier": "rawStorage"
+            },
+            "tags": "Element,Container,FileStorage",
+            "technology": "File System"
+          },
+          {
+            "description": "Processed data based on AV1 videos in MCAP format",
+            "documentation": {},
+            "id": "45",
+            "name": "Processed Episode Storage",
+            "properties": {
+              "structurizr.dsl.identifier": "processedStorage"
+            },
+            "tags": "Element,Container,FileStorage",
+            "technology": "File System"
+          }
+        ],
+        "description": "Microservice-driven robotics data orchestration platform",
+        "documentation": {},
+        "group": "LABS",
+        "id": "15",
+        "name": "LABS",
+        "properties": {
+          "structurizr.dsl.identifier": "dataCollectionPlatform"
+        },
+        "relationships": [
+          {
+            "description": "Uploads formatted datasets",
+            "destinationId": "54",
+            "id": "95",
+            "linkedRelationshipId": "93",
+            "sourceId": "15"
+          },
+          {
+            "description": "Uploads formatted datasets",
+            "destinationId": "53",
+            "id": "96",
+            "linkedRelationshipId": "93",
+            "sourceId": "15"
+          },
+          {
+            "description": "Publishes public dataset releases",
+            "destinationId": "56",
+            "id": "98",
+            "linkedRelationshipId": "97",
+            "sourceId": "15"
+          }
+        ],
+        "tags": "Element,Software System,FrankaSWSystem"
+      },
+      {
+        "containers": [
+          {
+            "components": [
+              {
+                "description": "Training data configuration",
+                "documentation": {},
+                "id": "48",
+                "name": "Data Config",
+                "properties": {
+                  "structurizr.dsl.identifier": "dataConfig"
+                },
+                "tags": "Element,Component,ConfigComponent",
+                "technology": "Python"
+              },
+              {
+                "description": "Vision-language foundation model",
+                "documentation": {},
+                "id": "49",
+                "name": "VLA Model",
+                "properties": {
+                  "structurizr.dsl.identifier": "vlaModel"
+                },
+                "relationships": [
+                  {
+                    "description": "Saves model weights",
+                    "destinationId": "55",
+                    "id": "106",
+                    "sourceId": "49",
+                    "tags": "Relationship"
+                  },
+                  {
+                    "description": "Saves model weights",
+                    "destinationId": "53",
+                    "id": "107",
+                    "linkedRelationshipId": "106",
+                    "sourceId": "49"
+                  }
+                ],
+                "tags": "Element,Component,AIModel",
+                "technology": "PyTorch"
+              },
+              {
+                "description": "Model fine-tuning scripts",
+                "documentation": {},
+                "id": "50",
+                "name": "Training Scripts",
+                "properties": {
+                  "structurizr.dsl.identifier": "trainingScripts"
+                },
+                "relationships": [
+                  {
+                    "description": "Fine-tunes model",
+                    "destinationId": "49",
+                    "id": "105",
+                    "sourceId": "50",
+                    "tags": "Relationship"
+                  }
+                ],
+                "tags": "Element,Component,TrainingScript",
+                "technology": "Python"
+              }
+            ],
+            "description": "VLA model training framework",
+            "documentation": {},
+            "id": "47",
+            "name": "VLA model",
+            "properties": {
+              "structurizr.dsl.identifier": "vlaContainer"
+            },
+            "relationships": [
+              {
+                "description": "Saves model weights",
+                "destinationId": "55",
+                "id": "108",
+                "linkedRelationshipId": "106",
+                "sourceId": "47"
+              },
+              {
+                "description": "Saves model weights",
+                "destinationId": "53",
+                "id": "109",
+                "linkedRelationshipId": "106",
+                "sourceId": "47"
+              }
+            ],
+            "tags": "Element,Container,VLA",
+            "technology": "Python/PyTorch"
+          },
+          {
+            "description": "Alternative LeRobot training pipeline",
+            "documentation": {},
+            "id": "51",
+            "name": "LeRobot Training",
+            "properties": {
+              "structurizr.dsl.identifier": "lerobotContainer"
+            },
+            "tags": "Element,Container,TrainingFramework",
+            "technology": "Python/PyTorch"
+          },
+          {
+            "description": "Optimized inference engine",
+            "documentation": {},
+            "id": "52",
+            "name": "TensorRT Engine",
+            "properties": {
+              "structurizr.dsl.identifier": "tensorrtContainer"
+            },
+            "tags": "Element,Container,TensorRT",
+            "technology": "TensorRT"
+          }
+        ],
+        "description": "VLA model training framework",
+        "documentation": {},
+        "group": "Model Training Pipeline",
+        "id": "46",
+        "name": "Model Training",
+        "properties": {
+          "structurizr.dsl.identifier": "modelTraining"
+        },
+        "relationships": [
+          {
+            "description": "Saves model weights",
+            "destinationId": "55",
+            "id": "110",
+            "linkedRelationshipId": "106",
+            "sourceId": "46"
+          },
+          {
+            "description": "Saves model weights",
+            "destinationId": "53",
+            "id": "111",
+            "linkedRelationshipId": "106",
+            "sourceId": "46"
+          }
+        ],
+        "tags": "Element,Software System,AISystem"
+      },
+      {
+        "containers": [
+          {
+            "description": "Formatted robot episodes for model training",
+            "documentation": {},
+            "id": "54",
+            "name": "Datasets",
+            "properties": {
+              "structurizr.dsl.identifier": "datasets"
+            },
+            "relationships": [
+              {
+                "description": "Loads training data",
+                "destinationId": "48",
+                "id": "99",
+                "sourceId": "54",
+                "tags": "Relationship"
+              },
+              {
+                "description": "Loads training data",
+                "destinationId": "47",
+                "id": "100",
+                "linkedRelationshipId": "99",
+                "sourceId": "54"
+              },
+              {
+                "description": "Loads training data",
+                "destinationId": "46",
+                "id": "101",
+                "linkedRelationshipId": "99",
+                "sourceId": "54"
+              }
+            ],
+            "tags": "Element,Container,FileStorage",
+            "technology": "File System"
+          },
+          {
+            "description": "Fine-tuned model weights",
+            "documentation": {},
+            "id": "55",
+            "name": "Model Checkpoints",
+            "properties": {
+              "structurizr.dsl.identifier": "checkpoints"
+            },
+            "relationships": [
+              {
+                "description": "Uploads checkpoints",
+                "destinationId": "56",
+                "id": "112",
+                "sourceId": "55",
+                "tags": "Relationship"
+              },
+              {
+                "description": "Creates optimized engine",
+                "destinationId": "52",
+                "id": "113",
+                "sourceId": "55",
+                "tags": "Relationship"
+              },
+              {
+                "description": "Creates optimized engine",
+                "destinationId": "46",
+                "id": "114",
+                "linkedRelationshipId": "113",
+                "sourceId": "55"
+              },
+              {
+                "description": "Loads fine-tuned model",
+                "destinationId": "60",
+                "id": "116",
+                "sourceId": "55",
+                "tags": "Relationship"
+              },
+              {
+                "description": "Loads fine-tuned model",
+                "destinationId": "58",
+                "id": "117",
+                "linkedRelationshipId": "116",
+                "sourceId": "55"
+              },
+              {
+                "description": "Loads fine-tuned model",
+                "destinationId": "57",
+                "id": "118",
+                "linkedRelationshipId": "116",
+                "sourceId": "55"
+              }
+            ],
+            "tags": "Element,Container,FileStorage",
+            "technology": "File System"
+          },
+          {
+            "description": "Model and dataset repository",
+            "documentation": {},
+            "id": "56",
+            "name": "Hugging Face Hub",
+            "properties": {
+              "structurizr.dsl.identifier": "huggingface"
+            },
+            "tags": "Element,Container,HuggingFace",
+            "technology": "Cloud"
+          }
+        ],
+        "description": "Dataset and model storage",
+        "documentation": {},
+        "group": "Model Training Pipeline",
+        "id": "53",
+        "name": "Data Storage",
+        "properties": {
+          "structurizr.dsl.identifier": "storageSystem"
+        },
+        "relationships": [
+          {
+            "description": "Loads training data",
+            "destinationId": "48",
+            "id": "102",
+            "linkedRelationshipId": "99",
+            "sourceId": "53"
+          },
+          {
+            "description": "Loads training data",
+            "destinationId": "47",
+            "id": "103",
+            "linkedRelationshipId": "99",
+            "sourceId": "53"
+          },
+          {
+            "description": "Loads training data",
+            "destinationId": "46",
+            "id": "104",
+            "linkedRelationshipId": "99",
+            "sourceId": "53"
+          },
+          {
+            "description": "Creates optimized engine",
+            "destinationId": "52",
+            "id": "115",
+            "linkedRelationshipId": "113",
+            "sourceId": "53"
+          },
+          {
+            "description": "Loads fine-tuned model",
+            "destinationId": "60",
+            "id": "119",
+            "linkedRelationshipId": "116",
+            "sourceId": "53"
+          },
+          {
+            "description": "Loads fine-tuned model",
+            "destinationId": "58",
+            "id": "120",
+            "linkedRelationshipId": "116",
+            "sourceId": "53"
+          },
+          {
+            "description": "Loads fine-tuned model",
+            "destinationId": "57",
+            "id": "121",
+            "linkedRelationshipId": "116",
+            "sourceId": "53"
+          }
+        ],
+        "tags": "Element,Software System,StorageSystem"
+      },
+      {
+        "containers": [
+          {
+            "components": [
+              {
+                "description": "Main inference control node",
+                "documentation": {},
+                "id": "59",
+                "name": "Inference Node",
+                "properties": {
+                  "structurizr.dsl.identifier": "inferenceNode"
+                },
+                "relationships": [
+                  {
+                    "description": "Generates actions",
+                    "destinationId": "61",
+                    "id": "128",
+                    "sourceId": "59",
+                    "tags": "Relationship"
+                  }
+                ],
+                "tags": "Element,Component,ROSNode",
+                "technology": "ROS 2/Python"
+              },
+              {
+                "description": "Model checkpoint loader",
+                "documentation": {},
+                "id": "60",
+                "name": "Policy Loader",
+                "properties": {
+                  "structurizr.dsl.identifier": "policyLoader"
+                },
+                "tags": "Element,Component,ModelLoader",
+                "technology": "Python"
+              },
+              {
+                "description": "Action smoothing and queueing",
+                "documentation": {},
+                "id": "61",
+                "name": "Action Queue",
+                "properties": {
+                  "structurizr.dsl.identifier": "actionQueue"
+                },
+                "tags": "Element,Component,ActionQueue",
+                "technology": "Python"
+              }
+            ],
+            "description": "VLA model based inference system",
+            "documentation": {},
+            "id": "58",
+            "name": "franka_learning_vla",
+            "properties": {
+              "structurizr.dsl.identifier": "vlaInferenceContainer"
+            },
+            "relationships": [
+              {
+                "description": "Executes control actions",
+                "destinationId": "64",
+                "id": "133",
+                "sourceId": "58",
+                "tags": "Relationship"
+              },
+              {
+                "description": "Executes control actions",
+                "destinationId": "62",
+                "id": "134",
+                "linkedRelationshipId": "133",
+                "sourceId": "58"
+              }
+            ],
+            "tags": "Element,Container,ROSPackage",
+            "technology": "ROS 2/Python"
+          }
+        ],
+        "description": "Inference for the VLA model at 20Hz based in ROS 2",
+        "documentation": {},
+        "group": "Inference Pipeline",
+        "id": "57",
+        "name": "Franka Inference",
+        "properties": {
+          "structurizr.dsl.identifier": "inference"
+        },
+        "relationships": [
+          {
+            "description": "Executes control actions",
+            "destinationId": "64",
+            "id": "135",
+            "linkedRelationshipId": "133",
+            "sourceId": "57"
+          },
+          {
+            "description": "Executes control actions",
+            "destinationId": "62",
+            "id": "136",
+            "linkedRelationshipId": "133",
+            "sourceId": "57"
+          }
+        ],
+        "tags": "Element,Software System,FrankaSWSystem"
+      },
+      {
+        "containers": [
+          {
+            "description": "Single arm Franka FR3 robot",
+            "documentation": {},
+            "id": "63",
+            "name": "FR3 Robot",
+            "properties": {
+              "structurizr.dsl.identifier": "fr3Robot"
+            },
+            "relationships": [
+              {
+                "description": "Publishes robot state (ROS 2 topics)",
+                "destinationId": "40",
+                "id": "81",
+                "sourceId": "63",
+                "tags": "Relationship"
+              },
+              {
+                "description": "Publishes robot state (ROS 2 topics)",
+                "destinationId": "15",
+                "id": "82",
+                "linkedRelationshipId": "81",
+                "sourceId": "63"
+              }
+            ],
+            "tags": "Element,Container,PhysicalRobot",
+            "technology": "Physical Robot"
+          },
+          {
+            "description": "Dual arm Franka FR3 robot system",
+            "documentation": {},
+            "id": "64",
+            "name": "FR3 Duo",
+            "properties": {
+              "structurizr.dsl.identifier": "fr3DuoRobot"
+            },
+            "relationships": [
+              {
+                "description": "Reports current state",
+                "destinationId": "58",
+                "id": "129",
+                "sourceId": "64",
+                "tags": "Relationship"
+              },
+              {
+                "description": "Reports current state",
+                "destinationId": "57",
+                "id": "130",
+                "linkedRelationshipId": "129",
+                "sourceId": "64"
+              }
+            ],
+            "tags": "Element,Container,PhysicalRobot",
+            "technology": "Physical Robot"
+          }
+        ],
+        "description": "Franka FR3, FR3 Duo or Mobile FR3 Duo robot system with its ROS 2 interface",
+        "documentation": {},
+        "group": "Inference Pipeline",
+        "id": "62",
+        "name": "Franka Robot",
+        "properties": {
+          "structurizr.dsl.identifier": "frankaRobots"
+        },
+        "relationships": [
+          {
+            "description": "Publishes robot state (ROS 2 topics)",
+            "destinationId": "40",
+            "id": "83",
+            "linkedRelationshipId": "81",
+            "sourceId": "62"
+          },
+          {
+            "description": "Publishes robot state (ROS 2 topics)",
+            "destinationId": "15",
+            "id": "84",
+            "linkedRelationshipId": "81",
+            "sourceId": "62"
+          },
+          {
+            "description": "Reports current state",
+            "destinationId": "58",
+            "id": "131",
+            "linkedRelationshipId": "129",
+            "sourceId": "62"
+          },
+          {
+            "description": "Reports current state",
+            "destinationId": "57",
+            "id": "132",
+            "linkedRelationshipId": "129",
+            "sourceId": "62"
+          }
+        ],
+        "tags": "Element,Software System,RobotSystem"
+      }
+    ]
+  },
+  "name": "LABS",
+  "properties": {
+    "structurizr.inspection.error": "128",
+    "structurizr.dsl": "d29ya3NwYWNlIHsKICAgIG5hbWUgIkxBQlMiCiAgICBkZXNjcmlwdGlvbiAiVGVsZW9wZXJhdGlvbi1iYXNlZCByb2JvdCBsZWFybmluZyBzeXN0ZW0gYmFzZWQgb24gRnJhbmthIHJvYm90cyIKCiAgICBtb2RlbCB7CiAgICAgICAgdXNlciA9IHBlcnNvbiAiT3BlcmF0b3IiICJIdW1hbiBvcGVyYXRvciBjb250cm9sbGluZyB0aGUgcm9ib3Qgc3lzdGVtIGFuZCBkYXRhIHJlY29yZGluZyB3b3JrZmxvdyIKCiAgICAgICAgZ3JvdXAgIkxBQlMiIHsKICAgICAgICAgICAgIyBFeHRlcm5hbCB0ZWxlb3BlcmF0aW9uIGRldmljZXMKICAgICAgICAgICAgdGVsZW9wU3lzdGVtID0gc29mdHdhcmVTeXN0ZW0gIlRlbGVvcGVyYXRpb24gRGV2aWNlcyIgIkV4dGVybmFsIGNvbnRyb2wgZGV2aWNlcyBhbmQgdGhlaXIgUk9TIGludGVyZmFjZXMiIHsKICAgICAgICAgICAgICAgIHRhZ3MgIlRlbGVvcERldmljZSIKCiAgICAgICAgICAgICAgICAjIEdFTExPIHdlYXJhYmxlCiAgICAgICAgICAgICAgICBnZWxsb0hhcmR3YXJlID0gY29udGFpbmVyICJHRUxMTyBIYXJkd2FyZSIgIlBoeXNpY2FsIHdlYXJhYmxlIGRldmljZSIgIkhhcHRpYyBEZXZpY2UiIHsKICAgICAgICAgICAgICAgICAgICB0YWdzICJJbnB1dERldmljZSIKICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIGdlbGxvU29mdHdhcmUgPSBjb250YWluZXIgIkdFTExPIFNvZnR3YXJlIiAiZ2VsbG9fc29mdHdhcmUgUk9TIGRyaXZlciIgIlJPUyAyL1B5dGhvbiIgewogICAgICAgICAgICAgICAgICAgIHRhZ3MgIlJPU0RyaXZlciIKICAgICAgICAgICAgICAgIH0KCiAgICAgICAgICAgICAgICAjIEZyYW5rYSBsZWFkZXIgcm9ib3RzIHVzZWQgZm9yIHRlbGVvcGVyYXRpb24KICAgICAgICAgICAgICAgIGZyM0xlYWRlciA9IGNvbnRhaW5lciAiRlIzIExlYWRlciBSb2JvdCIgIlNpbmdsZSBhcm0gRnJhbmthIEZSMyB1c2VkIGFzIGxlYWRlciIgIlBoeXNpY2FsIFJvYm90IiB7CiAgICAgICAgICAgICAgICAgICAgdGFncyAiUGh5c2ljYWxSb2JvdCIKICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIGZyM0R1b0xlYWRlciA9IGNvbnRhaW5lciAiRlIzIExlYWRlciBEdW8iICJEdWFsIGFybSBGcmFua2EgRlIzIGxlYWRlciIgIlBoeXNpY2FsIFJvYm90IiB7CiAgICAgICAgICAgICAgICAgICAgdGFncyAiUGh5c2ljYWxSb2JvdCIKICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIGZyM1RlbGVvcCA9IGNvbnRhaW5lciAiZnIzX3JvczJfdGVsZW9wIiAiTGVhZGVyIGNvbnRyb2wgc3RhY2siICJST1MgMiIgewogICAgICAgICAgICAgICAgICAgIHRhZ3MgIlJPU0ludGVyZmFjZSIKICAgICAgICAgICAgICAgIH0KCiAgICAgICAgICAgICAgICAjIEFkZGl0aW9uYWwgY3VzdG9tIGRldmljZXMKICAgICAgICAgICAgICAgIHRlbGVvcERldmljZXMgPSBjb250YWluZXIgIkN1c3RvbSBIYXJkd2FyZSIgIlZhcmlvdXMgdGVsZW9wZXJhdGlvbiBkZXZpY2VzIiAiSGFyZHdhcmUiIHsKICAgICAgICAgICAgICAgICAgICB0YWdzICJJbnB1dERldmljZSIKICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIHRlbGVvcERyaXZlcnMgPSBjb250YWluZXIgIlNwZWNpZmljIERyaXZlcnMiICJEZXZpY2Utc3BlY2lmaWMgUk9TIGRyaXZlcnMiICJST1MgMi9QeXRob24iIHsKICAgICAgICAgICAgICAgICAgICB0YWdzICJST1NEcml2ZXIiCiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgIH0KCiAgICAgICAgICAgIGNhbWVyYVN5c3RlbSA9IHNvZnR3YXJlU3lzdGVtICJDYW1lcmEgU3lzdGVtIiAiSGVhZCwgd3Jpc3QsIGFuZCBlbnZpcm9ubWVudGFsIGNhbWVyYXMgd2l0aCB0aGVpciBST1MgZHJpdmVycyIgewogICAgICAgICAgICAgICAgdGFncyAiU2Vuc29yU3lzdGVtIgogICAgICAgICAgICAgICAgaGVhZENhbWVyYSA9IGNvbnRhaW5lciAiSGVhZCBDYW1lcmEiICJQcmltYXJ5IHZpc2lvbiBzZW5zb3IiICJDYW1lcmEgSGFyZHdhcmUiIHsKICAgICAgICAgICAgICAgICAgICB0YWdzICJDYW1lcmFIYXJkd2FyZSIKICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIHdyaXN0Q2FtZXJhcyA9IGNvbnRhaW5lciAiV3Jpc3QgQ2FtZXJhcyIgIkNhbWVyYXMgbW91bnRlZCBvbiB3cmlzdHMiICJDYW1lcmEgSGFyZHdhcmUiIHsKICAgICAgICAgICAgICAgICAgICB0YWdzICJDYW1lcmFIYXJkd2FyZSIKICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIGJvZHlDYW1lcmEgPSBjb250YWluZXIgIkJvZHkgQ2FtZXJhIiAiT3B0aW9uYWwgYm9keSBjYW1lcmEgZm9yIGNsb3NlLXVwIHZpZXdzIiAiQ2FtZXJhIEhhcmR3YXJlIiB7CiAgICAgICAgICAgICAgICAgICAgdGFncyAiQ2FtZXJhSGFyZHdhcmUiCiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICBjYW1lcmFEcml2ZXJzID0gY29udGFpbmVyICJDYW1lcmEgRHJpdmVycyIgIlJPUyBkcml2ZXJzIGZvciBjYW1lcmEgZmVlZHMiICJST1MgMi9QeXRob24iIHsKICAgICAgICAgICAgICAgICAgICB0YWdzICJST1NEcml2ZXIiCiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgIH0KCiAgICAgICAgICAgIGRhdGFDb2xsZWN0aW9uUGxhdGZvcm0gPSBzb2Z0d2FyZVN5c3RlbSAiTEFCUyIgIk1pY3Jvc2VydmljZS1kcml2ZW4gcm9ib3RpY3MgZGF0YSBvcmNoZXN0cmF0aW9uIHBsYXRmb3JtIiB7CiAgICAgICAgICAgICAgICB0YWdzICJGcmFua2FTV1N5c3RlbSIKCiAgICAgICAgICAgICAgICBkYXRhQ29sbGVjdGlvblVJID0gY29udGFpbmVyICJEYXRhIENvbGxlY3Rpb24gVUkiICJEYXNoYm9hcmQgZm9yIGRldmljZSBoZWFsdGggY2hlY2sgbW9uaXRvcmluZywgdGVsZW9wZXJhdGlvbiwgbGl2ZSBjYW1lcmEgc3RyZWFtaW5nIGFuZCBzZXNzaW9uIG1hbmFnZW1lbnQiICJSZWFjdC9WaXRlIiB7CiAgICAgICAgICAgICAgICAgICAgdGFncyAiV2ViQXBwIgogICAgICAgICAgICAgICAgfQoKICAgICAgICAgICAgICAgIGRhdGFDb2xsZWN0aW9uU2VydmljZSA9IGNvbnRhaW5lciAiRGF0YSBDb2xsZWN0aW9uIFNlcnZpY2UiICJGYXN0QVBJIHNlcnZpY2VzIHRoYXQgY29vcmRpbmF0ZXMgdGVsZW9wIHdvcmtmbG93LCBkZXZpY2UgaGVhbHRoLCBhbmQgcmVjb3JkZXIgY29tbWFuZHMuIiAiRmFzdEFQSS9QeXRob24iIHsKICAgICAgICAgICAgICAgICAgICB0YWdzICJTZXJ2aWNlIgoKICAgICAgICAgICAgICAgICAgICBlcGlzb2RlSGFuZGxlcnMgPSBjb21wb25lbnQgIkVwaXNvZGUgJiBUZWxlb3AgQVBJcyIgIkZhc3RBUEkgZW5kcG9pbnRzIGZvciB0YXNrcywgZGV2aWNlcywgdGVsZW9wIiAiRmFzdEFQSSIgewogICAgICAgICAgICAgICAgICAgICAgICB0YWdzICJTZXJ2aWNlIgogICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgICAgICBkZXZpY2VNb25pdG9yID0gY29tcG9uZW50ICJEZXZpY2UgTW9uaXRvciIgIkJhY2tncm91bmQgUk9TIGRldmljZS90b3BpYyBoZWFsdGggbW9uaXRvciB0aHJlYWQiICJQeXRob24iIHsKICAgICAgICAgICAgICAgICAgICAgICAgdGFncyAiU2VydmljZSIKICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICB9CgogICAgICAgICAgICAgICAgLy8gTk9URTogd29ya2Zsb3dTTSBhbmQgcmVjb3JkaW5nU00gYXJlIGxvZ2ljYWwgY29tcG9uZW50cyBvZiBkYXRhQ29sbGVjdGlvblNlcnZpY2UsCiAgICAgICAgICAgICAgICAvLyBidXQgYXJlIG1vZGVsbGVkIGFzIGNvbnRhaW5lcnMgc28gdGhhdCBkZWRpY2F0ZWQgY29tcG9uZW50IHZpZXdzIGNhbiBiZSByZW5kZXJlZCBmb3IgdGhlaXIgc3RhdGUgZGlhZ3JhbXMuCiAgICAgICAgICAgICAgICAvLyBUaGV5IGFyZSBleGNsdWRlZCBmcm9tIERhdGFDb2xsZWN0aW9uLUNvbnRhaW5lcnMgdG8gYXZvaWQgY2x1dHRlcmluZyB0aGF0IHZpZXcuCiAgICAgICAgICAgICAgICB3b3JrZmxvd1NNID0gY29udGFpbmVyICJXb3JrZmxvdyBTdGF0ZSBNYWNoaW5lIiAiTWFuYWdlcyByb2JvdCBsaWZlY3ljbGUgdHJhbnNpdGlvbnM6IGlkbGUg4oaSIHJlYWR5IOKGkiBzeW5jaW5nIOKGkiBmb2xsb3dpbmcgKHdvcmtmbG93LnB5KSIgIlB5dGhvbiIgewogICAgICAgICAgICAgICAgICAgIHRhZ3MgIlN0YXRlTWFjaGluZSIKCiAgICAgICAgICAgICAgICAgICAgd2ZJZGxlID0gY29tcG9uZW50ICJJRExFIiAiU3lzdGVtIGluYWN0aXZlLCBubyByb2JvdCBjb250cm9sbGVyIHJ1bm5pbmciICJQeXRob24iIHsKICAgICAgICAgICAgICAgICAgICAgICAgdGFncyAiU3RhdGVJZGxlIgogICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgICAgICB3ZlJlYWR5ID0gY29tcG9uZW50ICJSRUFEWSIgIlJvYm90IGFjdGl2ZSBidXQgbm90IGFjY2VwdGluZyBjb21tYW5kIGlucHV0IiAiUHl0aG9uIiB7CiAgICAgICAgICAgICAgICAgICAgICAgIHRhZ3MgIlN0YXRlUmVhZHkiCiAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgIHdmU3luY2luZyA9IGNvbXBvbmVudCAiU1lOQ0lORyIgIlJvYm90IGFsaWduaW5nIHdpdGggdGVsZW9wIGRldmljZSBwb3NlIiAiUHl0aG9uIiB7CiAgICAgICAgICAgICAgICAgICAgICAgIHRhZ3MgIlN0YXRlU3luY2luZyIKICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICAgICAgd2ZGb2xsb3dpbmcgPSBjb21wb25lbnQgIkZPTExPV0lORyIgIlJvYm90IGZvbGxvd2luZyB0ZWxlb3AgZGV2aWNlIiAiUHl0aG9uIiB7CiAgICAgICAgICAgICAgICAgICAgICAgIHRhZ3MgIlN0YXRlRm9sbG93aW5nIgogICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgICAgICB3ZklkbGUgLT4gd2ZSZWFkeSAiZ2V0X3JlYWR5IgogICAgICAgICAgICAgICAgICAgIHdmUmVhZHkgLT4gd2ZTeW5jaW5nICJzdGFydF9zeW5jaW5nIgogICAgICAgICAgICAgICAgICAgIHdmU3luY2luZyAtPiB3ZkZvbGxvd2luZyAic3RhcnRfdGVsZW9wIgogICAgICAgICAgICAgICAgICAgIHdmRm9sbG93aW5nIC0+IHdmUmVhZHkgInN0b3BfdGVsZW9wIgogICAgICAgICAgICAgICAgICAgIHdmU3luY2luZyAtPiB3ZlJlYWR5ICJzdG9wX3RlbGVvcCIKICAgICAgICAgICAgICAgICAgICB3ZlJlYWR5IC0+IHdmSWRsZSAiZ2V0X2lkbGUiCiAgICAgICAgICAgICAgICB9CgogICAgICAgICAgICAgICAgcmVjb3JkaW5nU00gPSBjb250YWluZXIgIlJlY29yZGluZyBTdGF0ZSBNYWNoaW5lIiAiTWFuYWdlcyBwZXItZXBpc29kZSByZWNvcmRpbmcgbGlmZWN5Y2xlOiBpZGxlIOKGkiByZWNvcmRpbmcg4oaSIHJldmlld2luZyAocmVjb3JkaW5nLnB5KSIgIlB5dGhvbiIgewogICAgICAgICAgICAgICAgICAgIHRhZ3MgIlN0YXRlTWFjaGluZSIKCiAgICAgICAgICAgICAgICAgICAgcmVjSWRsZSA9IGNvbXBvbmVudCAiSURMRSIgIldhaXRpbmcgZm9yIHRoZSBvcGVyYXRvciB0byBzdGFydCBhIG5ldyBlcGlzb2RlIHJlY29yZGluZyIgIlB5dGhvbiIgewogICAgICAgICAgICAgICAgICAgICAgICB0YWdzICJTdGF0ZUlkbGUiCiAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgIHJlY1JlY29yZGluZyA9IGNvbXBvbmVudCAiUkVDT1JESU5HIiAiQ2FwdHVyaW5nIFJPUyB0b3BpY3MgaW4gTUNBUCBmb3IgdGhlIGN1cnJlbnQgZXBpc29kZSIgIlB5dGhvbiIgewogICAgICAgICAgICAgICAgICAgICAgICB0YWdzICJTdGF0ZVJlY29yZGluZyIKICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICAgICAgcmVjUmV2aWV3aW5nID0gY29tcG9uZW50ICJSRVZJRVdJTkciICJFcGlzb2RlIHJlY29yZGVkIGFuZCB3YWl0aW5nIGZvciBsYWJlbCAoc3VjY2VzcywgZmFpbHVyZSwgb3IgZGVsZXRpb24pIiAiUHl0aG9uIiB7CiAgICAgICAgICAgICAgICAgICAgICAgIHRhZ3MgIlN0YXRlUmV2aWV3aW5nIgogICAgICAgICAgICAgICAgICAgIH0KCiAgICAgICAgICAgICAgICAgICAgcmVjSWRsZSAtPiByZWNSZWNvcmRpbmcgInN0YXJ0X3JlY29yZGluZyIKICAgICAgICAgICAgICAgICAgICByZWNSZWNvcmRpbmcgLT4gcmVjUmV2aWV3aW5nICJzdG9wX3JlY29yZGluZyIKICAgICAgICAgICAgICAgICAgICByZWNSZXZpZXdpbmcgLT4gcmVjSWRsZSAibWFya19zdWNjZXNzIgogICAgICAgICAgICAgICAgICAgIHJlY1Jldmlld2luZyAtPiByZWNJZGxlICJtYXJrX2ZhaWx1cmUiCiAgICAgICAgICAgICAgICAgICAgcmVjUmV2aWV3aW5nIC0+IHJlY0lkbGUgImRlbGV0ZSIKICAgICAgICAgICAgICAgIH0KCiAgICAgICAgICAgICAgICBkYXRhUmVjb3JkZXJTZXJ2aWNlID0gY29udGFpbmVyICJEYXRhIFJlY29yZGVyIFNlcnZpY2UiICJST1MgMiBtaWNyb3NlcnZpY2UgZm9yIGNhcHR1cmluZyBhbmQgcmVjb3JkaW5nIGRhdGEgc3RyZWFtcyB0byBNQ0FQIGZvcm1hdCIgIlJPUyAyL0Zhc3RBUEkiIHsKICAgICAgICAgICAgICAgICAgICB0YWdzICJTZXJ2aWNlIgogICAgICAgICAgICAgICAgfQoKICAgICAgICAgICAgICAgIGRhdGFQcm9jZXNzb3JTZXJ2aWNlID0gY29udGFpbmVyICJEYXRhIFByb2Nlc3NvciBTZXJ2aWNlIiAiQmF0Y2ggcHJvY2Vzc2luZyBkYWVtb24gZm9yIHN0b3JhZ2UtZWZmaWNpZW50IGZvcm1hdCBjb252ZXJzaW9uIiAiUHl0aG9uIiB7CiAgICAgICAgICAgICAgICAgICAgdGFncyAiU2VydmljZSIKICAgICAgICAgICAgICAgIH0KCiAgICAgICAgICAgICAgICBkYXRhc2V0QnVpbGRlciA9IGNvbnRhaW5lciAiRGF0YXNldCBCdWlsZGVyIiAiRXhwb3J0IHRvb2xpbmcgdG8gc3BlY2lmaWMgZm9ybWF0IChlLmcuLCBMZVJvYm90KSIgIlB5dGhvbiBDTEkiIHsKICAgICAgICAgICAgICAgICAgICB0YWdzICJUb29saW5nIgogICAgICAgICAgICAgICAgfQoKICAgICAgICAgICAgICAgIHN0YXRpb25Db25maWcgPSBjb250YWluZXIgIlN0YXRpb24gQ29uZmlnICYgTWV0YWRhdGEiICJDb25maWd1cmF0aW9uIGZpbGVzIGZvciB0aGUgcm9ib3QsIGNhbWVyYXMsIHRlbGVvcGVyYXRpb24gZGV2aWNlcyBhbmQgY29sbGVjdGVkIHRhc2siICJZQU1ML0pTT04iIHsKICAgICAgICAgICAgICAgICAgICB0YWdzICJDb25maWciCiAgICAgICAgICAgICAgICB9CgogICAgICAgICAgICAgICAgcmF3U3RvcmFnZSA9IGNvbnRhaW5lciAiUmF3IEVwaXNvZGUgU3RvcmFnZSIgIlJhdyBkYXRhIGJhc2VkIG9uIFJPUyAyIGJhZ3MiICJGaWxlIFN5c3RlbSIgewogICAgICAgICAgICAgICAgICAgIHRhZ3MgIkZpbGVTdG9yYWdlIgogICAgICAgICAgICAgICAgfQoKICAgICAgICAgICAgICAgIHByb2Nlc3NlZFN0b3JhZ2UgPSBjb250YWluZXIgIlByb2Nlc3NlZCBFcGlzb2RlIFN0b3JhZ2UiICJQcm9jZXNzZWQgZGF0YSBiYXNlZCBvbiBBVjEgdmlkZW9zIGluIE1DQVAgZm9ybWF0IiAiRmlsZSBTeXN0ZW0iIHsKICAgICAgICAgICAgICAgICAgICB0YWdzICJGaWxlU3RvcmFnZSIKICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgfQogICAgICAgIH0KCiAgICAgICAgZ3JvdXAgIk1vZGVsIFRyYWluaW5nIFBpcGVsaW5lIiB7CgogICAgICAgICAgICBtb2RlbFRyYWluaW5nID0gc29mdHdhcmVTeXN0ZW0gIk1vZGVsIFRyYWluaW5nIiAiVkxBIG1vZGVsIHRyYWluaW5nIGZyYW1ld29yayIgewogICAgICAgICAgICAgICAgdGFncyAiQUlTeXN0ZW0iCiAgICAgICAgICAgICAgICB2bGFDb250YWluZXIgPSBjb250YWluZXIgIlZMQSBtb2RlbCIgIlZMQSBtb2RlbCB0cmFpbmluZyBmcmFtZXdvcmsiICJQeXRob24vUHlUb3JjaCIgewogICAgICAgICAgICAgICAgICAgIHRhZ3MgIlZMQSIKICAgICAgICAgICAgICAgICAgICBkYXRhQ29uZmlnID0gY29tcG9uZW50ICJEYXRhIENvbmZpZyIgIlRyYWluaW5nIGRhdGEgY29uZmlndXJhdGlvbiIgIlB5dGhvbiIgewogICAgICAgICAgICAgICAgICAgICAgICB0YWdzICJDb25maWdDb21wb25lbnQiCiAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgIHZsYU1vZGVsID0gY29tcG9uZW50ICJWTEEgTW9kZWwiICJWaXNpb24tbGFuZ3VhZ2UgZm91bmRhdGlvbiBtb2RlbCIgIlB5VG9yY2giIHsKICAgICAgICAgICAgICAgICAgICAgICAgdGFncyAiQUlNb2RlbCIKICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICAgICAgdHJhaW5pbmdTY3JpcHRzID0gY29tcG9uZW50ICJUcmFpbmluZyBTY3JpcHRzIiAiTW9kZWwgZmluZS10dW5pbmcgc2NyaXB0cyIgIlB5dGhvbiIgewogICAgICAgICAgICAgICAgICAgICAgICB0YWdzICJUcmFpbmluZ1NjcmlwdCIKICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgIGxlcm9ib3RDb250YWluZXIgPSBjb250YWluZXIgIkxlUm9ib3QgVHJhaW5pbmciICJBbHRlcm5hdGl2ZSBMZVJvYm90IHRyYWluaW5nIHBpcGVsaW5lIiAiUHl0aG9uL1B5VG9yY2giIHsKICAgICAgICAgICAgICAgICAgICB0YWdzICJUcmFpbmluZ0ZyYW1ld29yayIKICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIHRlbnNvcnJ0Q29udGFpbmVyID0gY29udGFpbmVyICJUZW5zb3JSVCBFbmdpbmUiICJPcHRpbWl6ZWQgaW5mZXJlbmNlIGVuZ2luZSIgIlRlbnNvclJUIiB7CiAgICAgICAgICAgICAgICAgICAgdGFncyAiVGVuc29yUlQiCiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgIH0KCiAgICAgICAgICAgIHN0b3JhZ2VTeXN0ZW0gPSBzb2Z0d2FyZVN5c3RlbSAiRGF0YSBTdG9yYWdlIiAiRGF0YXNldCBhbmQgbW9kZWwgc3RvcmFnZSIgewogICAgICAgICAgICAgICAgdGFncyAiU3RvcmFnZVN5c3RlbSIKICAgICAgICAgICAgICAgIGRhdGFzZXRzID0gY29udGFpbmVyICJEYXRhc2V0cyIgIkZvcm1hdHRlZCByb2JvdCBlcGlzb2RlcyBmb3IgbW9kZWwgdHJhaW5pbmciICJGaWxlIFN5c3RlbSIgewogICAgICAgICAgICAgICAgICAgIHRhZ3MgIkZpbGVTdG9yYWdlIgogICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgY2hlY2twb2ludHMgPSBjb250YWluZXIgIk1vZGVsIENoZWNrcG9pbnRzIiAiRmluZS10dW5lZCBtb2RlbCB3ZWlnaHRzIiAiRmlsZSBTeXN0ZW0iIHsKICAgICAgICAgICAgICAgICAgICB0YWdzICJGaWxlU3RvcmFnZSIKICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIGh1Z2dpbmdmYWNlID0gY29udGFpbmVyICJIdWdnaW5nIEZhY2UgSHViIiAiTW9kZWwgYW5kIGRhdGFzZXQgcmVwb3NpdG9yeSIgIkNsb3VkIiB7CiAgICAgICAgICAgICAgICAgICAgdGFncyAiSHVnZ2luZ0ZhY2UiCiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgIH0KICAgICAgICB9CgogICAgICAgIGdyb3VwICJJbmZlcmVuY2UgUGlwZWxpbmUiIHsKCiAgICAgICAgICAgIGluZmVyZW5jZSA9IHNvZnR3YXJlU3lzdGVtICJGcmFua2EgSW5mZXJlbmNlIiAiSW5mZXJlbmNlIGZvciB0aGUgVkxBIG1vZGVsIGF0IDIwSHogYmFzZWQgaW4gUk9TIDIiIHsKICAgICAgICAgICAgICAgIHRhZ3MgIkZyYW5rYVNXU3lzdGVtIgogICAgICAgICAgICAgICAgdmxhSW5mZXJlbmNlQ29udGFpbmVyID0gY29udGFpbmVyICJmcmFua2FfbGVhcm5pbmdfdmxhIiAiVkxBIG1vZGVsIGJhc2VkIGluZmVyZW5jZSBzeXN0ZW0iICJST1MgMi9QeXRob24iIHsKICAgICAgICAgICAgICAgICAgICB0YWdzICJST1NQYWNrYWdlIgogICAgICAgICAgICAgICAgICAgIGluZmVyZW5jZU5vZGUgPSBjb21wb25lbnQgIkluZmVyZW5jZSBOb2RlIiAiTWFpbiBpbmZlcmVuY2UgY29udHJvbCBub2RlIiAiUk9TIDIvUHl0aG9uIiB7CiAgICAgICAgICAgICAgICAgICAgICAgIHRhZ3MgIlJPU05vZGUiCiAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgIHBvbGljeUxvYWRlciA9IGNvbXBvbmVudCAiUG9saWN5IExvYWRlciIgIk1vZGVsIGNoZWNrcG9pbnQgbG9hZGVyIiAiUHl0aG9uIiB7CiAgICAgICAgICAgICAgICAgICAgICAgIHRhZ3MgIk1vZGVsTG9hZGVyIgogICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgICAgICBhY3Rpb25RdWV1ZSA9IGNvbXBvbmVudCAiQWN0aW9uIFF1ZXVlIiAiQWN0aW9uIHNtb290aGluZyBhbmQgcXVldWVpbmciICJQeXRob24iIHsKICAgICAgICAgICAgICAgICAgICAgICAgdGFncyAiQWN0aW9uUXVldWUiCiAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgfQogICAgICAgICAgICB9CgoKICAgICAgICAgICAgZnJhbmthUm9ib3RzID0gc29mdHdhcmVTeXN0ZW0gIkZyYW5rYSBSb2JvdCIgIkZyYW5rYSBGUjMsIEZSMyBEdW8gb3IgTW9iaWxlIEZSMyBEdW8gcm9ib3Qgc3lzdGVtIHdpdGggaXRzIFJPUyAyIGludGVyZmFjZSIgewogICAgICAgICAgICAgICAgdGFncyAiUm9ib3RTeXN0ZW0iCiAgICAgICAgICAgICAgICBmcjNSb2JvdCA9IGNvbnRhaW5lciAiRlIzIFJvYm90IiAiU2luZ2xlIGFybSBGcmFua2EgRlIzIHJvYm90IiAiUGh5c2ljYWwgUm9ib3QiIHsKICAgICAgICAgICAgICAgICAgICB0YWdzICJQaHlzaWNhbFJvYm90IgogICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgZnIzRHVvUm9ib3QgPSBjb250YWluZXIgIkZSMyBEdW8iICJEdWFsIGFybSBGcmFua2EgRlIzIHJvYm90IHN5c3RlbSIgIlBoeXNpY2FsIFJvYm90IiB7CiAgICAgICAgICAgICAgICAgICAgdGFncyAiUGh5c2ljYWxSb2JvdCIKICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgfQogICAgICAgIH0KCiAgICAgICAgIyBVc2VyIGludGVyYWN0aW9ucwogICAgICAgIHVzZXIgLT4gZGF0YUNvbGxlY3Rpb25VSSAiUGxhbnMsIGxhYmVscywgYW5kIG1vbml0b3JzIGVwaXNvZGVzIgogICAgICAgIHVzZXIgLT4gZ2VsbG9IYXJkd2FyZSAiQ29udHJvbHMgcm9ib3Qgam9pbnQtYmFzZWQgbW92ZW1lbnRzIgogICAgICAgIHVzZXIgLT4gdGVsZW9wRGV2aWNlcyAiQ29udHJvbHMgcm9ib3QgdmlhIGN1c3RvbSBpbnRlcmZhY2UiCiAgICAgICAgdXNlciAtPiBmcjNEdW9MZWFkZXIgIkNvbnRyb2xzIGxlYWRlciByb2JvdCIKICAgICAgICB1c2VyIC0+IHN0YXRpb25Db25maWcgIlNldHMgc3RhdGlvbi1zcGVjaWZpYyBjb25maWd1cmF0aW9uIgoKICAgICAgICBkYXRhQ29sbGVjdGlvblVJIC0+IGRhdGFDb2xsZWN0aW9uU2VydmljZSAiU3RhcnQvc3RvcCB0ZWxlb3AgYW5kIHJlY29yZGluZywgYXNzaWduIHRhc2tzIGFuZCBlcGlzb2RlIG1hbmFnZW1lbnQiCiAgICAgICAgZGF0YUNvbGxlY3Rpb25TZXJ2aWNlIC0+IGRhdGFDb2xsZWN0aW9uVUkgIlN0cmVhbXMgbGl2ZSBkZXZpY2UgaGVhbHRoIGFuZCBlcGlzb2RlIGV2ZW50IHVwZGF0ZXMiCgogICAgICAgICMgQ29yZSBzZXJ2aWNlIGludGVyYWN0aW9ucwogICAgICAgIGRhdGFDb2xsZWN0aW9uU2VydmljZSAtPiBzdGF0aW9uQ29uZmlnICJMb2FkcyBzdGF0aW9uIGNvbmZpZ3VyYXRpb24iCiAgICAgICAgZGF0YUNvbGxlY3Rpb25TZXJ2aWNlIC0+IHdvcmtmbG93U00gIkRyaXZlcyB3b3JrZmxvdyB0cmFuc2l0aW9ucyIKICAgICAgICBkYXRhQ29sbGVjdGlvblNlcnZpY2UgLT4gcmVjb3JkaW5nU00gIkRyaXZlcyByZWNvcmRpbmcgdHJhbnNpdGlvbnMiCiAgICAgICAgZGF0YUNvbGxlY3Rpb25TZXJ2aWNlIC0+IGRhdGFSZWNvcmRlclNlcnZpY2UgIlN0YXJ0L3N0b3AgcmVjb3JkaW5nIHZpYSBSRVNUIgogICAgICAgIGRhdGFQcm9jZXNzb3JTZXJ2aWNlIC0+IGRhdGFDb2xsZWN0aW9uU2VydmljZSAiUG9sbHMgZXBpc29kZSBwcm9jZXNzZWQgc3RhdHVzIgogICAgICAgIC8vIGRhdGFzZXRCdWlsZGVyIC0+IGRhdGFDb2xsZWN0aW9uU2VydmljZSAiRmV0Y2hlcyBtYW5pZmVzdHMgJiB0YWdzIgoKICAgICAgICAjIFRlbGVvcGVyYXRpb24gJiBzZW5zaW5nIGRhdGEgZmxvdwogICAgICAgIC8vIGdlbGxvU29mdHdhcmUgLT4gZGF0YVJlY29yZGVyU2VydmljZSAiUHVibGlzaGVzIGpvaW50IHN0YXRlcyAoUk9TIDIgdG9waWNzKSIKICAgICAgICAvLyBmcjNUZWxlb3AgLT4gZGF0YVJlY29yZGVyU2VydmljZSAiUHVibGlzaGVzIGxlYWRlciByb2JvdCBzdGF0ZXMiCiAgICAgICAgLy8gdGVsZW9wRHJpdmVycyAtPiBkYXRhUmVjb3JkZXJTZXJ2aWNlICJQdWJsaXNoZXMgZGV2aWNlLXNwZWNpZmljIGNvbW1hbmRzIgogICAgICAgIHRlbGVvcFN5c3RlbSAtPiBkYXRhUmVjb3JkZXJTZXJ2aWNlICJQdWJsaXNoZXMgZGV2aWNlIHN0YXRlcyBhbmQgY29tbWFuZHMiCiAgICAgICAgZnIzUm9ib3QgLT4gZGF0YVJlY29yZGVyU2VydmljZSAiUHVibGlzaGVzIHJvYm90IHN0YXRlIChST1MgMiB0b3BpY3MpIgoKICAgICAgICAjIENhbWVyYSBkYXRhIGZsb3cKICAgICAgICAvLyBoZWFkQ2FtZXJhIC0+IGRhdGFSZWNvcmRlclNlcnZpY2UgIlB1Ymxpc2hlcyBjYW1lcmEgZmVlZHMiCiAgICAgICAgLy8gd3Jpc3RDYW1lcmFzIC0+IGRhdGFSZWNvcmRlclNlcnZpY2UgIlB1Ymxpc2hlcyBjYW1lcmEgZmVlZHMiCiAgICAgICAgLy8gYm9keUNhbWVyYSAtPiBkYXRhUmVjb3JkZXJTZXJ2aWNlICJQdWJsaXNoZXMgY2FtZXJhIGZlZWRzIgogICAgICAgIGNhbWVyYURyaXZlcnMgLT4gZGF0YVJlY29yZGVyU2VydmljZSAiUHVibGlzaGVzIGNhbWVyYSBmZWVkcyIKCiAgICAgICAgIyBFcGlzb2RlIHN0b3JhZ2UgJiBwcm9jZXNzaW5nCiAgICAgICAgZGF0YVJlY29yZGVyU2VydmljZSAtPiByYXdTdG9yYWdlICJXcml0ZXMgcmF3IFJPUyAyIGJhZyBkYXRhIgogICAgICAgIGRhdGFQcm9jZXNzb3JTZXJ2aWNlIC0+IHJhd1N0b3JhZ2UgIlJlYWRzIHJhdyBST1MgMiBiYWcgZGF0YSIKICAgICAgICBkYXRhUHJvY2Vzc29yU2VydmljZSAtPiBwcm9jZXNzZWRTdG9yYWdlICJXcml0ZXMgcHJvY2Vzc2VkIE1DQVAgZGF0YSIKICAgICAgICBkYXRhc2V0QnVpbGRlciAtPiBwcm9jZXNzZWRTdG9yYWdlICJSZWFkcyBwcm9jZXNzZWQgZXBpc29kZXMiCiAgICAgICAgZGF0YXNldEJ1aWxkZXIgLT4gZGF0YXNldHMgIlVwbG9hZHMgZm9ybWF0dGVkIGRhdGFzZXRzIgogICAgICAgIGRhdGFzZXRCdWlsZGVyIC0+IGh1Z2dpbmdmYWNlICJQdWJsaXNoZXMgcHVibGljIGRhdGFzZXQgcmVsZWFzZXMiCgogICAgICAgICMgVHJhaW5pbmcgZmxvdwogICAgICAgIGRhdGFzZXRzIC0+IGRhdGFDb25maWcgIkxvYWRzIHRyYWluaW5nIGRhdGEiCiAgICAgICAgdHJhaW5pbmdTY3JpcHRzIC0+IHZsYU1vZGVsICJGaW5lLXR1bmVzIG1vZGVsIgogICAgICAgIHZsYU1vZGVsIC0+IGNoZWNrcG9pbnRzICJTYXZlcyBtb2RlbCB3ZWlnaHRzIgogICAgICAgIGNoZWNrcG9pbnRzIC0+IGh1Z2dpbmdmYWNlICJVcGxvYWRzIGNoZWNrcG9pbnRzIgogICAgICAgIGNoZWNrcG9pbnRzIC0+IHRlbnNvcnJ0Q29udGFpbmVyICJDcmVhdGVzIG9wdGltaXplZCBlbmdpbmUiCgogICAgICAgICMgSW5mZXJlbmNlIGZsb3cKICAgICAgICBjaGVja3BvaW50cyAtPiBwb2xpY3lMb2FkZXIgIkxvYWRzIGZpbmUtdHVuZWQgbW9kZWwiCiAgICAgICAgY2FtZXJhRHJpdmVycyAtPiBpbmZlcmVuY2VOb2RlICJQcm92aWRlcyB2aXN1YWwgaW5wdXQiCiAgICAgICAgaW5mZXJlbmNlTm9kZSAtPiBhY3Rpb25RdWV1ZSAiR2VuZXJhdGVzIGFjdGlvbnMiCiAgICAgICAgZnIzRHVvUm9ib3QgLT4gdmxhSW5mZXJlbmNlQ29udGFpbmVyICJSZXBvcnRzIGN1cnJlbnQgc3RhdGUiCiAgICAgICAgdmxhSW5mZXJlbmNlQ29udGFpbmVyIC0+IGZyM0R1b1JvYm90ICJFeGVjdXRlcyBjb250cm9sIGFjdGlvbnMiCiAgICB9CgogICAgdmlld3MgewogICAgICAgIHN5c3RlbUxhbmRzY2FwZSAiU3lzdGVtTGFuZHNjYXBlIiB7CiAgICAgICAgICAgIGluY2x1ZGUgKgogICAgICAgICAgICBhdXRvTGF5b3V0IHRiCiAgICAgICAgfQoKICAgICAgICBzeXN0ZW1Db250ZXh0IGRhdGFDb2xsZWN0aW9uUGxhdGZvcm0gIkRhdGFDb2xsZWN0aW9uLUNvbnRleHQiIHsKICAgICAgICAgICAgaW5jbHVkZSB1c2VyCiAgICAgICAgICAgIGluY2x1ZGUgc3RvcmFnZVN5c3RlbQogICAgICAgICAgICBpbmNsdWRlIHRlbGVvcFN5c3RlbQogICAgICAgICAgICBpbmNsdWRlIGNhbWVyYVN5c3RlbQogICAgICAgICAgICAvLyBleGNsdWRlZCBmcmFua2FSb2JvdHMgc2luY2UgaXQgaXMgcGFydGVkIG9mIHRoZSBpbmZlcmVuY2UgY29udGV4dCwgYnV0IGNvdWxkIGJlIGluY2x1ZGVkIGlmIGRlc2lyZWQKICAgICAgICAgICAgYXV0b0xheW91dCB0YgogICAgICAgIH0KCiAgICAgICAgc3lzdGVtQ29udGV4dCBpbmZlcmVuY2UgIkluZmVyZW5jZS1Db250ZXh0IiB7CiAgICAgICAgICAgIGluY2x1ZGUgKgogICAgICAgICAgICBhdXRvTGF5b3V0IGxyCiAgICAgICAgfQoKICAgICAgICBjb250YWluZXIgZGF0YUNvbGxlY3Rpb25QbGF0Zm9ybSAiRGF0YUNvbGxlY3Rpb24tQ29udGFpbmVycyIgewogICAgICAgICAgICBpbmNsdWRlICoKICAgICAgICAgICAgZXhjbHVkZSB3b3JrZmxvd1NNCiAgICAgICAgICAgIGV4Y2x1ZGUgcmVjb3JkaW5nU00KICAgICAgICAgICAgLy8gYXV0b0xheW91dCBscgogICAgICAgIH0KCiAgICAgICAgY29udGFpbmVyIGluZmVyZW5jZSAiSW5mZXJlbmNlLUNvbnRhaW5lcnMiIHsKICAgICAgICAgICAgaW5jbHVkZSAqCiAgICAgICAgICAgIGF1dG9MYXlvdXQgbHIKICAgICAgICB9CgogICAgICAgIGNvbnRhaW5lciBtb2RlbFRyYWluaW5nICJUcmFpbmluZy1Db250YWluZXJzIiB7CiAgICAgICAgICAgIGluY2x1ZGUgKgogICAgICAgICAgICBhdXRvTGF5b3V0IGxyCiAgICAgICAgfQoKICAgICAgICBjb21wb25lbnQgZGF0YUNvbGxlY3Rpb25TZXJ2aWNlICJEYXRhQ29sbGVjdGlvblNlcnZpY2UtQ29tcG9uZW50cyIgewogICAgICAgICAgICBpbmNsdWRlICoKICAgICAgICAgICAgYXV0b0xheW91dCBscgogICAgICAgIH0KCiAgICAgICAgY29tcG9uZW50IHdvcmtmbG93U00gIldvcmtmbG93U3RhdGVNYWNoaW5lIiAiV29ya2Zsb3cgc3RhdGUgbWFjaGluZSIgewogICAgICAgICAgICBpbmNsdWRlICoKICAgICAgICAgICAgLy8gYXV0b0xheW91dCBscgogICAgICAgIH0KCiAgICAgICAgY29tcG9uZW50IHJlY29yZGluZ1NNICJSZWNvcmRpbmdTdGF0ZU1hY2hpbmUiICJSZWNvcmRpbmcgc3RhdGUgbWFjaGluZSIgewogICAgICAgICAgICBpbmNsdWRlICoKICAgICAgICAgICAgYXV0b0xheW91dCBscgogICAgICAgIH0KCiAgICAgICAgY29tcG9uZW50IHZsYUluZmVyZW5jZUNvbnRhaW5lciAiSW5mZXJlbmNlLUNvbXBvbmVudHMiIHsKICAgICAgICAgICAgaW5jbHVkZSAqCiAgICAgICAgICAgIGF1dG9MYXlvdXQgbHIKICAgICAgICB9CgogICAgICAgIGR5bmFtaWMgZGF0YUNvbGxlY3Rpb25QbGF0Zm9ybSAiRGF0YVJlY29yZGluZy1GbG93IiAiRGF0YSByZWNvcmRpbmcgd29ya2Zsb3ciIHsKICAgICAgICAgICAgdXNlciAtPiBkYXRhQ29sbGVjdGlvblVJICJQbGFucyBzZXNzaW9uIGFuZCByZXF1ZXN0cyByZWNvcmRpbmciCiAgICAgICAgICAgIGRhdGFDb2xsZWN0aW9uVUkgLT4gZGF0YUNvbGxlY3Rpb25TZXJ2aWNlICJTZW5kcyBzdGFydCByZWNvcmRpbmcgY29tbWFuZCIKICAgICAgICAgICAgZGF0YUNvbGxlY3Rpb25TZXJ2aWNlIC0+IGRhdGFSZWNvcmRlclNlcnZpY2UgIklzc3VlcyBzdGFydCB0byBST1MgYmFnIHNlcnZpY2UiCiAgICAgICAgICAgIGRhdGFSZWNvcmRlclNlcnZpY2UgLT4gcmF3U3RvcmFnZSAiV3JpdGVzIFJPUyAyIGJhZyBkYXRhICsgbWV0YWRhdGEiCiAgICAgICAgICAgIGRhdGFQcm9jZXNzb3JTZXJ2aWNlIC0+IHJhd1N0b3JhZ2UgIlB1bGxzIHJhdyBST1MgMiBiYWcgZGF0YSIKICAgICAgICAgICAgZGF0YVByb2Nlc3NvclNlcnZpY2UgLT4gcHJvY2Vzc2VkU3RvcmFnZSAiU3RvcmVzIHByb2Nlc3NlZCBST1MgMiBiYWcgZGF0YSIKICAgICAgICAgICAgZGF0YXNldEJ1aWxkZXIgLT4gcHJvY2Vzc2VkU3RvcmFnZSAiUmVhZHMgcHJvY2Vzc2VkIGVwaXNvZGUgYnVuZGxlIgogICAgICAgICAgICBkYXRhc2V0QnVpbGRlciAtPiBkYXRhc2V0cyAiVXBsb2FkcyBjdXJhdGVkIGRhdGFzZXQiCiAgICAgICAgICAgIGF1dG9MYXlvdXQgbHIKICAgICAgICB9CgogICAgICAgIGR5bmFtaWMgbW9kZWxUcmFpbmluZyAiVHJhaW5pbmctRmxvdyIgIk1vZGVsIHRyYWluaW5nIHdvcmtmbG93IiB7CiAgICAgICAgICAgIGRhdGFzZXRzIC0+IHZsYUNvbnRhaW5lciAiTG9hZHMgZGVtb25zdHJhdGlvbiBkYXRhIgogICAgICAgICAgICB2bGFDb250YWluZXIgLT4gY2hlY2twb2ludHMgIlNhdmVzIGZpbmUtdHVuZWQgbW9kZWwiCiAgICAgICAgICAgIGNoZWNrcG9pbnRzIC0+IHRlbnNvcnJ0Q29udGFpbmVyICJPcHRpbWl6ZXMgZm9yIGluZmVyZW5jZSIKICAgICAgICAgICAgYXV0b0xheW91dCBscgogICAgICAgIH0KCiAgICAgICAgZHluYW1pYyBpbmZlcmVuY2UgIkluZmVyZW5jZS1GbG93IiAiQXV0b25vbW91cyBleGVjdXRpb24gd29ya2Zsb3ciIHsKICAgICAgICAgICAgY2hlY2twb2ludHMgLT4gdmxhSW5mZXJlbmNlQ29udGFpbmVyICJMb2FkcyBmaW5lLXR1bmVkIHBvbGljeSIKICAgICAgICAgICAgY2FtZXJhRHJpdmVycyAtPiB2bGFJbmZlcmVuY2VDb250YWluZXIgIlByb3ZpZGVzIHZpc3VhbCBpbnB1dCIKICAgICAgICAgICAgZnIzRHVvUm9ib3QgLT4gdmxhSW5mZXJlbmNlQ29udGFpbmVyICJSZXBvcnRzIGN1cnJlbnQgc3RhdGUiCiAgICAgICAgICAgIHZsYUluZmVyZW5jZUNvbnRhaW5lciAtPiBmcjNEdW9Sb2JvdCAiRXhlY3V0ZXMgYWN0aW9uIgogICAgICAgICAgICBhdXRvTGF5b3V0IGxyCiAgICAgICAgfQoKICAgICAgICBzdHlsZXMgewogICAgICAgICAgICBlbGVtZW50ICJQZXJzb24iIHsKICAgICAgICAgICAgICAgIGNvbG9yICNmZmZmZmYKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgIzA4NDI3YgogICAgICAgICAgICAgICAgc2hhcGUgUGVyc29uCiAgICAgICAgICAgIH0KICAgICAgICAgICAgZWxlbWVudCAiU29mdHdhcmUgU3lzdGVtIiB7CiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kICMxMTY4YmQKICAgICAgICAgICAgICAgIGNvbG9yICNmZmZmZmYKICAgICAgICAgICAgfQogICAgICAgICAgICBlbGVtZW50ICJDb250YWluZXIiIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgIzQzOGRkNQogICAgICAgICAgICAgICAgY29sb3IgI2ZmZmZmZgogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIkNvbXBvbmVudCIgewogICAgICAgICAgICAgICAgYmFja2dyb3VuZCAjODViYmYwCiAgICAgICAgICAgICAgICBjb2xvciAjMDAwMDAwCiAgICAgICAgICAgIH0KICAgICAgICAgICAgZWxlbWVudCAiV2ViQXBwIiB7CiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kICMyZDg4ZWYKICAgICAgICAgICAgICAgIGNvbG9yICNmZmZmZmYKICAgICAgICAgICAgfQogICAgICAgICAgICBlbGVtZW50ICJTZXJ2aWNlIiB7CiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kICMxYjJmMzYKICAgICAgICAgICAgICAgIGNvbG9yICNmZmZmZmYKICAgICAgICAgICAgfQogICAgICAgICAgICBlbGVtZW50ICJUb29saW5nIiB7CiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kICM2MDdkOGIKICAgICAgICAgICAgICAgIGNvbG9yICNmZmZmZmYKICAgICAgICAgICAgfQogICAgICAgICAgICBlbGVtZW50ICJDb25maWciIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgI2FiZGRhNAogICAgICAgICAgICAgICAgY29sb3IgIzAwMDAwMAogICAgICAgICAgICB9CiAgICAgICAgICAgIAogICAgICAgICAgICAjIEhhcmR3YXJlIGVsZW1lbnRzCiAgICAgICAgICAgIGVsZW1lbnQgIlBoeXNpY2FsUm9ib3QiIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgI2RlZTNlMwogICAgICAgICAgICAgICAgY29sb3IgIzFiMmYzNgogICAgICAgICAgICAgICAgc2hhcGUgUm9ib3QKICAgICAgICAgICAgfQogICAgICAgICAgICBlbGVtZW50ICJIYXB0aWNEZXZpY2UiIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgI2RlZTNlMwogICAgICAgICAgICAgICAgY29sb3IgIzFmNzdiNAogICAgICAgICAgICAgICAgc2hhcGUgQ29tcG9uZW50CiAgICAgICAgICAgIH0KICAgICAgICAgICAgZWxlbWVudCAiQ2FtZXJhSGFyZHdhcmUiIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgI2RlZTNlMwogICAgICAgICAgICAgICAgY29sb3IgIzI5YjZmNgogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIklucHV0RGV2aWNlIiB7CiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kICNkZWUzZTMKICAgICAgICAgICAgICAgIGNvbG9yICMxZjc3YjQKICAgICAgICAgICAgfQogICAgICAgICAgICBlbGVtZW50ICJDdXN0b21EZXZpY2UiIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgI2RlZTNlMwogICAgICAgICAgICAgICAgY29sb3IgIzFmNzdiNAogICAgICAgICAgICB9CiAgICAgICAgICAgIAogICAgICAgICAgICAjIFNvZnR3YXJlIGVsZW1lbnRzCiAgICAgICAgICAgIGVsZW1lbnQgIlJPU1BhY2thZ2UiIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgIzIzMjk0ZQogICAgICAgICAgICAgICAgY29sb3IgI2ZmZmZmZgogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIlJPU05vZGUiIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgIzIzMjk0ZQogICAgICAgICAgICAgICAgY29sb3IgI2ZmZmZmZgogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIlJPU0RyaXZlciIgewogICAgICAgICAgICAgICAgYmFja2dyb3VuZCAjMjMyOTRlCiAgICAgICAgICAgICAgICBjb2xvciAjZmZmZmZmCiAgICAgICAgICAgIH0KICAgICAgICAgICAgZWxlbWVudCAiUk9TSW50ZXJmYWNlIiB7CiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kICMyMzI5NGUKICAgICAgICAgICAgICAgIGNvbG9yICNmZmZmZmYKICAgICAgICAgICAgfQogICAgICAgICAgICBlbGVtZW50ICJDb25maWdMaWJyYXJ5IiB7CiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kICM1MjYwQjYKICAgICAgICAgICAgICAgIGNvbG9yICNmZmZmZmYKICAgICAgICAgICAgfQogICAgICAgICAgICAvLyBlbGVtZW50ICJDb250cm9sSW50ZXJmYWNlIiB7CiAgICAgICAgICAgIC8vICAgICBiYWNrZ3JvdW5kICMyNmM2ZGEKICAgICAgICAgICAgLy8gICAgIGNvbG9yICNmZmZmZmYKICAgICAgICAgICAgLy8gfQogICAgICAgICAgICAvLyBlbGVtZW50ICJJbmZlcmVuY2VOb2RlIiB7CiAgICAgICAgICAgIC8vICAgICBiYWNrZ3JvdW5kICM1YWFlNjEKICAgICAgICAgICAgLy8gICAgIGNvbG9yICNmZmZmZmYKICAgICAgICAgICAgLy8gfQogICAgICAgICAgICAKICAgICAgICAgICAgIyBBSS9NTCBlbGVtZW50cwogICAgICAgICAgICBlbGVtZW50ICJBSU1vZGVsIiB7CiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kICNmZjcwNDMKICAgICAgICAgICAgICAgIGNvbG9yICNmZmZmZmYKICAgICAgICAgICAgICAgIHNoYXBlIENvbXBvbmVudAogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIlZMQSIgewogICAgICAgICAgICAgICAgYmFja2dyb3VuZCAjZmY3MDQzCiAgICAgICAgICAgICAgICBjb2xvciAjZmZmZmZmCiAgICAgICAgICAgIH0KICAgICAgICAgICAgZWxlbWVudCAiVHJhaW5pbmdGcmFtZXdvcmsiIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgI2ZmNzA0MwogICAgICAgICAgICAgICAgY29sb3IgI2ZmZmZmZgogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIlRlbnNvclJUIiB7CiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kICM3NjJhODMKICAgICAgICAgICAgICAgIGNvbG9yICNmZmZmZmYKICAgICAgICAgICAgfQogICAgICAgICAgICBlbGVtZW50ICJUcmFpbmluZ1NjcmlwdCIgewogICAgICAgICAgICAgICAgYmFja2dyb3VuZCAjZmY3MDQzCiAgICAgICAgICAgICAgICBjb2xvciAjZmZmZmZmCiAgICAgICAgICAgIH0KICAgICAgICAgICAgZWxlbWVudCAiTW9kZWxMb2FkZXIiIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgI2ZmNzA0MwogICAgICAgICAgICAgICAgY29sb3IgI2ZmZmZmZgogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIkFjdGlvblF1ZXVlIiB7CiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kICNmZjcwNDMKICAgICAgICAgICAgICAgIGNvbG9yICNmZmZmZmYKICAgICAgICAgICAgfQogICAgICAgICAgICAKICAgICAgICAgICAgIyBDb25maWd1cmF0aW9uIGVsZW1lbnRzCiAgICAgICAgICAgIGVsZW1lbnQgIkNvbmZpZ0NvbXBvbmVudCIgewogICAgICAgICAgICAgICAgYmFja2dyb3VuZCAjYWJkZGE0CiAgICAgICAgICAgICAgICBjb2xvciAjMDAwMDAwCiAgICAgICAgICAgIH0KICAgICAgICAgICAgZWxlbWVudCAiRGF0YUhhbmRsZXIiIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgI2FiZGRhNAogICAgICAgICAgICAgICAgY29sb3IgIzAwMDAwMAogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIkludGVyZmFjZUxpYnJhcnkiIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgI2FiZGRhNAogICAgICAgICAgICAgICAgY29sb3IgIzAwMDAwMAogICAgICAgICAgICB9CiAgICAgICAgICAgIAogICAgICAgICAgICAjIFN0b3JhZ2UgZWxlbWVudHMKICAgICAgICAgICAgZWxlbWVudCAiRmlsZVN0b3JhZ2UiIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgI2NjY2NjYwogICAgICAgICAgICAgICAgY29sb3IgIzAwMDAwMAogICAgICAgICAgICAgICAgc2hhcGUgQ3lsaW5kZXIKICAgICAgICAgICAgfQogICAgICAgICAgICBlbGVtZW50ICJIdWdnaW5nRmFjZSIgewogICAgICAgICAgICAgICAgYmFja2dyb3VuZCAjZmRiZDE5CiAgICAgICAgICAgICAgICBjb2xvciAjZmZmZmZmCiAgICAgICAgICAgICAgICBzaGFwZSBDeWxpbmRlcgogICAgICAgICAgICB9CiAgICAgICAgICAgIAogICAgICAgICAgICAjIFN5c3RlbSBjYXRlZ29yaWVzCiAgICAgICAgICAgIGVsZW1lbnQgIlRlbGVvcERldmljZSIgewogICAgICAgICAgICAgICAgYmFja2dyb3VuZCAjMWY3N2I0CiAgICAgICAgICAgICAgICBjb2xvciAjZmZmZmZmCiAgICAgICAgICAgIH0KICAgICAgICAgICAgZWxlbWVudCAiUm9ib3RTeXN0ZW0iIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgI2RlZTNlMwogICAgICAgICAgICAgICAgY29sb3IgIzFiMmYzNgogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIkZyYW5rYVNXU3lzdGVtIiB7CiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kICMxYjJmMzYKICAgICAgICAgICAgICAgIGNvbG9yICNmZmZmZmYKICAgICAgICAgICAgfQogICAgICAgICAgICBlbGVtZW50ICJBSVN5c3RlbSIgewogICAgICAgICAgICAgICAgYmFja2dyb3VuZCAjZmY3MDQzCiAgICAgICAgICAgICAgICBjb2xvciAjZmZmZmZmCiAgICAgICAgICAgIH0KICAgICAgICAgICAgZWxlbWVudCAiU3RvcmFnZVN5c3RlbSIgewogICAgICAgICAgICAgICAgYmFja2dyb3VuZCAjNDU1QTY0CiAgICAgICAgICAgICAgICBjb2xvciAjZmZmZmZmCiAgICAgICAgICAgICAgICBzaGFwZSBDeWxpbmRlcgogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIlNlbnNvclN5c3RlbSIgewogICAgICAgICAgICAgICAgYmFja2dyb3VuZCAjMjliNmY2CiAgICAgICAgICAgICAgICBjb2xvciAjZmZmZmZmCiAgICAgICAgICAgIH0KCiAgICAgICAgICAgICMgU3RhdGUgbWFjaGluZSBjb250YWluZXJzCiAgICAgICAgICAgIGVsZW1lbnQgIlN0YXRlTWFjaGluZSIgewogICAgICAgICAgICAgICAgYmFja2dyb3VuZCAjMzc0NzRmCiAgICAgICAgICAgICAgICBjb2xvciAjZmZmZmZmCiAgICAgICAgICAgIH0KCiAgICAgICAgICAgICMgU3RhdGUgbWFjaGluZSBzdGF0ZXMKICAgICAgICAgICAgZWxlbWVudCAiU3RhdGVJZGxlIiB7CiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kICNlY2VmZjEKICAgICAgICAgICAgICAgIGNvbG9yICM0NTVhNjQKICAgICAgICAgICAgICAgIHNoYXBlIFJvdW5kZWRCb3gKICAgICAgICAgICAgfQogICAgICAgICAgICBlbGVtZW50ICJTdGF0ZVJlYWR5IiB7CiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kICMxNTY1YzAKICAgICAgICAgICAgICAgIGNvbG9yICNmZmZmZmYKICAgICAgICAgICAgICAgIHNoYXBlIFJvdW5kZWRCb3gKICAgICAgICAgICAgfQogICAgICAgICAgICBlbGVtZW50ICJTdGF0ZVN5bmNpbmciIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgI2Y1N2MwMAogICAgICAgICAgICAgICAgY29sb3IgI2ZmZmZmZgogICAgICAgICAgICAgICAgc2hhcGUgUm91bmRlZEJveAogICAgICAgICAgICB9CiAgICAgICAgICAgIGVsZW1lbnQgIlN0YXRlRm9sbG93aW5nIiB7CiAgICAgICAgICAgICAgICBiYWNrZ3JvdW5kICMyZTdkMzIKICAgICAgICAgICAgICAgIGNvbG9yICNmZmZmZmYKICAgICAgICAgICAgICAgIHNoYXBlIFJvdW5kZWRCb3gKICAgICAgICAgICAgfQogICAgICAgICAgICBlbGVtZW50ICJTdGF0ZVJlY29yZGluZyIgewogICAgICAgICAgICAgICAgYmFja2dyb3VuZCAjYWQxNDU3CiAgICAgICAgICAgICAgICBjb2xvciAjZmZmZmZmCiAgICAgICAgICAgICAgICBzaGFwZSBSb3VuZGVkQm94CiAgICAgICAgICAgIH0KICAgICAgICAgICAgZWxlbWVudCAiU3RhdGVSZXZpZXdpbmciIHsKICAgICAgICAgICAgICAgIGJhY2tncm91bmQgIzZhMWI5YQogICAgICAgICAgICAgICAgY29sb3IgI2ZmZmZmZgogICAgICAgICAgICAgICAgc2hhcGUgUm91bmRlZEJveAogICAgICAgICAgICB9CiAgICAgICAgfQogICAgfQp9",
+    "structurizr.inspection.info": "0",
+    "structurizr.inspection.ignore": "0",
+    "structurizr.inspection.warning": "0"
+  },
+  "views": {
+    "componentViews": [
+      {
+        "automaticLayout": {
+          "edgeSeparation": 50,
+          "nodeSeparation": 50,
+          "rankDirection": "LeftRight",
+          "rankSeparation": 100,
+          "vertices": true
+        },
+        "containerId": "17",
+        "elements": [
+          {
+            "id": "18",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "19",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "externalContainerBoundariesVisible": false,
+        "key": "DataCollectionService-Components",
+        "name": "Component View: LABS - Data Collection Service",
+        "order": 7
+      },
+      {
+        "containerId": "20",
+        "description": "Workflow state machine",
+        "dimensions": {
+          "height": 1277,
+          "width": 4210
+        },
+        "elements": [
+          {
+            "id": "21",
+            "x": 300,
+            "y": 387
+          },
+          {
+            "id": "22",
+            "x": 1090,
+            "y": 387
+          },
+          {
+            "id": "23",
+            "x": 1880,
+            "y": 243
+          },
+          {
+            "id": "24",
+            "x": 2670,
+            "y": 462
+          }
+        ],
+        "externalContainerBoundariesVisible": false,
+        "key": "WorkflowStateMachine",
+        "name": "Component View: LABS - Workflow State Machine",
+        "order": 8,
+        "relationships": [
+          {
+            "id": "25",
+            "vertices": [
+              {
+                "x": 920,
+                "y": 300
+              }
+            ]
+          },
+          {
+            "id": "26",
+            "vertices": [
+              {
+                "x": 1710,
+                "y": 324
+              }
+            ]
+          },
+          {
+            "id": "27",
+            "vertices": [
+              {
+                "x": 2500,
+                "y": 506
+              }
+            ]
+          },
+          {
+            "id": "28",
+            "vertices": [
+              {
+                "x": 2500,
+                "y": 674
+              },
+              {
+                "x": 1710,
+                "y": 674
+              }
+            ]
+          },
+          {
+            "id": "29",
+            "vertices": [
+              {
+                "x": 1710,
+                "y": 537
+              }
+            ]
+          },
+          {
+            "id": "30",
+            "vertices": [
+              {
+                "x": 915,
+                "y": 780
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "automaticLayout": {
+          "edgeSeparation": 50,
+          "nodeSeparation": 50,
+          "rankDirection": "LeftRight",
+          "rankSeparation": 100,
+          "vertices": true
+        },
+        "containerId": "31",
+        "description": "Recording state machine",
+        "elements": [
+          {
+            "id": "32",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "33",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "34",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "externalContainerBoundariesVisible": false,
+        "key": "RecordingStateMachine",
+        "name": "Component View: LABS - Recording State Machine",
+        "order": 9,
+        "relationships": [
+          {
+            "id": "35"
+          },
+          {
+            "id": "36"
+          },
+          {
+            "id": "37"
+          },
+          {
+            "id": "38"
+          },
+          {
+            "id": "39"
+          }
+        ]
+      },
+      {
+        "automaticLayout": {
+          "edgeSeparation": 50,
+          "nodeSeparation": 50,
+          "rankDirection": "LeftRight",
+          "rankSeparation": 100,
+          "vertices": true
+        },
+        "containerId": "58",
+        "elements": [
+          {
+            "id": "10",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "53",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "59",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "60",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "61",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "externalContainerBoundariesVisible": false,
+        "key": "Inference-Components",
+        "name": "Component View: Franka Inference - franka_learning_vla",
+        "order": 10,
+        "relationships": [
+          {
+            "id": "119"
+          },
+          {
+            "id": "125"
+          },
+          {
+            "id": "128"
+          }
+        ]
+      }
+    ],
+    "configuration": {
+      "lastSavedView": "WorkflowStateMachine",
+      "styles": {
+        "elements": [
+          {
+            "background": "#ff7043",
+            "color": "#ffffff",
+            "shape": "Component",
+            "tag": "AIModel"
+          },
+          {
+            "background": "#ff7043",
+            "color": "#ffffff",
+            "tag": "AISystem"
+          },
+          {
+            "background": "#ff7043",
+            "color": "#ffffff",
+            "tag": "ActionQueue"
+          },
+          {
+            "background": "#dee3e3",
+            "color": "#29b6f6",
+            "tag": "CameraHardware"
+          },
+          {
+            "background": "#85bbf0",
+            "color": "#000000",
+            "tag": "Component"
+          },
+          {
+            "background": "#abdda4",
+            "color": "#000000",
+            "tag": "Config"
+          },
+          {
+            "background": "#abdda4",
+            "color": "#000000",
+            "tag": "ConfigComponent"
+          },
+          {
+            "background": "#5260b6",
+            "color": "#ffffff",
+            "tag": "ConfigLibrary"
+          },
+          {
+            "background": "#438dd5",
+            "color": "#ffffff",
+            "tag": "Container"
+          },
+          {
+            "background": "#dee3e3",
+            "color": "#1f77b4",
+            "tag": "CustomDevice"
+          },
+          {
+            "background": "#abdda4",
+            "color": "#000000",
+            "tag": "DataHandler"
+          },
+          {
+            "background": "#cccccc",
+            "color": "#000000",
+            "shape": "Cylinder",
+            "tag": "FileStorage"
+          },
+          {
+            "background": "#1b2f36",
+            "color": "#ffffff",
+            "tag": "FrankaSWSystem"
+          },
+          {
+            "background": "#dee3e3",
+            "color": "#1f77b4",
+            "shape": "Component",
+            "tag": "HapticDevice"
+          },
+          {
+            "background": "#fdbd19",
+            "color": "#ffffff",
+            "shape": "Cylinder",
+            "tag": "HuggingFace"
+          },
+          {
+            "background": "#dee3e3",
+            "color": "#1f77b4",
+            "tag": "InputDevice"
+          },
+          {
+            "background": "#abdda4",
+            "color": "#000000",
+            "tag": "InterfaceLibrary"
+          },
+          {
+            "background": "#ff7043",
+            "color": "#ffffff",
+            "tag": "ModelLoader"
+          },
+          {
+            "background": "#08427b",
+            "color": "#ffffff",
+            "shape": "Person",
+            "tag": "Person"
+          },
+          {
+            "background": "#dee3e3",
+            "color": "#1b2f36",
+            "shape": "Robot",
+            "tag": "PhysicalRobot"
+          },
+          {
+            "background": "#23294e",
+            "color": "#ffffff",
+            "tag": "ROSDriver"
+          },
+          {
+            "background": "#23294e",
+            "color": "#ffffff",
+            "tag": "ROSInterface"
+          },
+          {
+            "background": "#23294e",
+            "color": "#ffffff",
+            "tag": "ROSNode"
+          },
+          {
+            "background": "#23294e",
+            "color": "#ffffff",
+            "tag": "ROSPackage"
+          },
+          {
+            "background": "#dee3e3",
+            "color": "#1b2f36",
+            "tag": "RobotSystem"
+          },
+          {
+            "background": "#29b6f6",
+            "color": "#ffffff",
+            "tag": "SensorSystem"
+          },
+          {
+            "background": "#1b2f36",
+            "color": "#ffffff",
+            "tag": "Service"
+          },
+          {
+            "background": "#1168bd",
+            "color": "#ffffff",
+            "tag": "Software System"
+          },
+          {
+            "background": "#2e7d32",
+            "color": "#ffffff",
+            "shape": "RoundedBox",
+            "tag": "StateFollowing"
+          },
+          {
+            "background": "#eceff1",
+            "color": "#455a64",
+            "shape": "RoundedBox",
+            "tag": "StateIdle"
+          },
+          {
+            "background": "#37474f",
+            "color": "#ffffff",
+            "tag": "StateMachine"
+          },
+          {
+            "background": "#1565c0",
+            "color": "#ffffff",
+            "shape": "RoundedBox",
+            "tag": "StateReady"
+          },
+          {
+            "background": "#ad1457",
+            "color": "#ffffff",
+            "shape": "RoundedBox",
+            "tag": "StateRecording"
+          },
+          {
+            "background": "#6a1b9a",
+            "color": "#ffffff",
+            "shape": "RoundedBox",
+            "tag": "StateReviewing"
+          },
+          {
+            "background": "#f57c00",
+            "color": "#ffffff",
+            "shape": "RoundedBox",
+            "tag": "StateSyncing"
+          },
+          {
+            "background": "#455a64",
+            "color": "#ffffff",
+            "shape": "Cylinder",
+            "tag": "StorageSystem"
+          },
+          {
+            "background": "#1f77b4",
+            "color": "#ffffff",
+            "tag": "TeleopDevice"
+          },
+          {
+            "background": "#762a83",
+            "color": "#ffffff",
+            "tag": "TensorRT"
+          },
+          {
+            "background": "#607d8b",
+            "color": "#ffffff",
+            "tag": "Tooling"
+          },
+          {
+            "background": "#ff7043",
+            "color": "#ffffff",
+            "tag": "TrainingFramework"
+          },
+          {
+            "background": "#ff7043",
+            "color": "#ffffff",
+            "tag": "TrainingScript"
+          },
+          {
+            "background": "#ff7043",
+            "color": "#ffffff",
+            "tag": "VLA"
+          },
+          {
+            "background": "#2d88ef",
+            "color": "#ffffff",
+            "tag": "WebApp"
+          }
+        ]
+      },
+      "terminology": {}
+    },
+    "containerViews": [
+      {
+        "dimensions": {
+          "height": 3206,
+          "width": 4060
+        },
+        "elements": [
+          {
+            "id": "1",
+            "x": 579,
+            "y": 1640
+          },
+          {
+            "id": "2",
+            "x": 554,
+            "y": 1105
+          },
+          {
+            "id": "10",
+            "x": 554,
+            "y": 770
+          },
+          {
+            "id": "16",
+            "x": 1414,
+            "y": 1685
+          },
+          {
+            "id": "17",
+            "x": 2174,
+            "y": 1010
+          },
+          {
+            "id": "40",
+            "x": 2174,
+            "y": 570
+          },
+          {
+            "id": "41",
+            "x": 2159,
+            "y": 1450
+          },
+          {
+            "id": "42",
+            "x": 2164,
+            "y": 1890
+          },
+          {
+            "id": "43",
+            "x": 1449,
+            "y": 1010
+          },
+          {
+            "id": "44",
+            "x": 2999,
+            "y": 1265
+          },
+          {
+            "id": "45",
+            "x": 3004,
+            "y": 1660
+          },
+          {
+            "id": "53",
+            "x": 2174,
+            "y": 2380
+          },
+          {
+            "id": "62",
+            "x": 554,
+            "y": 445
+          }
+        ],
+        "externalSoftwareSystemBoundariesVisible": false,
+        "key": "DataCollection-Containers",
+        "name": "Container View: LABS",
+        "order": 4,
+        "relationships": [
+          {
+            "id": "65"
+          },
+          {
+            "id": "68"
+          },
+          {
+            "id": "71"
+          },
+          {
+            "id": "72"
+          },
+          {
+            "id": "73",
+            "vertices": [
+              {
+                "x": 1639,
+                "y": 1450
+              }
+            ]
+          },
+          {
+            "id": "74"
+          },
+          {
+            "id": "77"
+          },
+          {
+            "id": "78"
+          },
+          {
+            "id": "79",
+            "vertices": [
+              {
+                "x": 1294,
+                "y": 990
+              }
+            ]
+          },
+          {
+            "id": "83"
+          },
+          {
+            "id": "87"
+          },
+          {
+            "id": "89"
+          },
+          {
+            "id": "90"
+          },
+          {
+            "id": "91"
+          },
+          {
+            "id": "92"
+          },
+          {
+            "id": "94"
+          }
+        ],
+        "softwareSystemId": "15"
+      },
+      {
+        "automaticLayout": {
+          "edgeSeparation": 50,
+          "nodeSeparation": 50,
+          "rankDirection": "LeftRight",
+          "rankSeparation": 100,
+          "vertices": true
+        },
+        "elements": [
+          {
+            "id": "10",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "53",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "58",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "62",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "externalSoftwareSystemBoundariesVisible": false,
+        "key": "Inference-Containers",
+        "name": "Container View: Franka Inference",
+        "order": 5,
+        "relationships": [
+          {
+            "id": "120"
+          },
+          {
+            "id": "126"
+          },
+          {
+            "id": "131"
+          },
+          {
+            "id": "134"
+          }
+        ],
+        "softwareSystemId": "57"
+      },
+      {
+        "automaticLayout": {
+          "edgeSeparation": 50,
+          "nodeSeparation": 50,
+          "rankDirection": "LeftRight",
+          "rankSeparation": 100,
+          "vertices": true
+        },
+        "elements": [
+          {
+            "id": "47",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "51",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "52",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "53",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "externalSoftwareSystemBoundariesVisible": false,
+        "key": "Training-Containers",
+        "name": "Container View: Model Training",
+        "order": 6,
+        "relationships": [
+          {
+            "id": "103"
+          },
+          {
+            "id": "109"
+          },
+          {
+            "id": "115"
+          }
+        ],
+        "softwareSystemId": "46"
+      }
+    ],
+    "dynamicViews": [
+      {
+        "automaticLayout": {
+          "edgeSeparation": 50,
+          "nodeSeparation": 50,
+          "rankDirection": "LeftRight",
+          "rankSeparation": 100,
+          "vertices": true
+        },
+        "description": "Data recording workflow",
+        "elementId": "15",
+        "elements": [
+          {
+            "id": "1",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "16",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "17",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "40",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "41",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "42",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "44",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "45",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "54",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "externalBoundariesVisible": false,
+        "key": "DataRecording-Flow",
+        "name": "Dynamic View: LABS",
+        "order": 11,
+        "relationships": [
+          {
+            "description": "Plans session and requests recording",
+            "id": "65",
+            "order": "1",
+            "response": false
+          },
+          {
+            "description": "Sends start recording command",
+            "id": "72",
+            "order": "2",
+            "response": false
+          },
+          {
+            "description": "Issues start to ROS bag service",
+            "id": "77",
+            "order": "3",
+            "response": false
+          },
+          {
+            "description": "Writes ROS 2 bag data + metadata",
+            "id": "89",
+            "order": "4",
+            "response": false
+          },
+          {
+            "description": "Pulls raw ROS 2 bag data",
+            "id": "90",
+            "order": "5",
+            "response": false
+          },
+          {
+            "description": "Stores processed ROS 2 bag data",
+            "id": "91",
+            "order": "6",
+            "response": false
+          },
+          {
+            "description": "Reads processed episode bundle",
+            "id": "92",
+            "order": "7",
+            "response": false
+          },
+          {
+            "description": "Uploads curated dataset",
+            "id": "93",
+            "order": "8",
+            "response": false
+          }
+        ]
+      },
+      {
+        "automaticLayout": {
+          "edgeSeparation": 50,
+          "nodeSeparation": 50,
+          "rankDirection": "LeftRight",
+          "rankSeparation": 100,
+          "vertices": true
+        },
+        "description": "Model training workflow",
+        "elementId": "46",
+        "elements": [
+          {
+            "id": "47",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "52",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "54",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "55",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "externalBoundariesVisible": false,
+        "key": "Training-Flow",
+        "name": "Dynamic View: Model Training",
+        "order": 12,
+        "relationships": [
+          {
+            "description": "Loads demonstration data",
+            "id": "100",
+            "order": "1",
+            "response": false
+          },
+          {
+            "description": "Saves fine-tuned model",
+            "id": "108",
+            "order": "2",
+            "response": false
+          },
+          {
+            "description": "Optimizes for inference",
+            "id": "113",
+            "order": "3",
+            "response": false
+          }
+        ]
+      },
+      {
+        "automaticLayout": {
+          "edgeSeparation": 50,
+          "nodeSeparation": 50,
+          "rankDirection": "LeftRight",
+          "rankSeparation": 100,
+          "vertices": true
+        },
+        "description": "Autonomous execution workflow",
+        "elementId": "57",
+        "elements": [
+          {
+            "id": "14",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "55",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "58",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "64",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "externalBoundariesVisible": false,
+        "key": "Inference-Flow",
+        "name": "Dynamic View: Franka Inference",
+        "order": 13,
+        "relationships": [
+          {
+            "description": "Loads fine-tuned policy",
+            "id": "117",
+            "order": "1",
+            "response": false
+          },
+          {
+            "description": "Provides visual input",
+            "id": "123",
+            "order": "2",
+            "response": false
+          },
+          {
+            "description": "Reports current state",
+            "id": "129",
+            "order": "3",
+            "response": false
+          },
+          {
+            "description": "Executes action",
+            "id": "133",
+            "order": "4",
+            "response": false
+          }
+        ]
+      }
+    ],
+    "systemContextViews": [
+      {
+        "automaticLayout": {
+          "edgeSeparation": 50,
+          "nodeSeparation": 50,
+          "rankDirection": "TopBottom",
+          "rankSeparation": 100,
+          "vertices": true
+        },
+        "elements": [
+          {
+            "id": "1",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "2",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "10",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "15",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "53",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "enterpriseBoundaryVisible": true,
+        "key": "DataCollection-Context",
+        "name": "System Context View: LABS",
+        "order": 2,
+        "relationships": [
+          {
+            "id": "66"
+          },
+          {
+            "id": "68"
+          },
+          {
+            "id": "80"
+          },
+          {
+            "id": "88"
+          },
+          {
+            "id": "96"
+          }
+        ],
+        "softwareSystemId": "15"
+      },
+      {
+        "automaticLayout": {
+          "edgeSeparation": 50,
+          "nodeSeparation": 50,
+          "rankDirection": "LeftRight",
+          "rankSeparation": 100,
+          "vertices": true
+        },
+        "elements": [
+          {
+            "id": "10",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "53",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "57",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "62",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "enterpriseBoundaryVisible": true,
+        "key": "Inference-Context",
+        "name": "System Context View: Franka Inference",
+        "order": 3,
+        "relationships": [
+          {
+            "id": "121"
+          },
+          {
+            "id": "127"
+          },
+          {
+            "id": "132"
+          },
+          {
+            "id": "136"
+          }
+        ],
+        "softwareSystemId": "57"
+      }
+    ],
+    "systemLandscapeViews": [
+      {
+        "automaticLayout": {
+          "edgeSeparation": 50,
+          "nodeSeparation": 50,
+          "rankDirection": "TopBottom",
+          "rankSeparation": 100,
+          "vertices": true
+        },
+        "elements": [
+          {
+            "id": "1",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "2",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "10",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "15",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "46",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "53",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "57",
+            "x": 0,
+            "y": 0
+          },
+          {
+            "id": "62",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "enterpriseBoundaryVisible": true,
+        "key": "SystemLandscape",
+        "name": "System Landscape View",
+        "order": 1,
+        "relationships": [
+          {
+            "id": "104"
+          },
+          {
+            "id": "111"
+          },
+          {
+            "id": "121"
+          },
+          {
+            "id": "127"
+          },
+          {
+            "id": "132"
+          },
+          {
+            "id": "136"
+          },
+          {
+            "id": "66"
+          },
+          {
+            "id": "68"
+          },
+          {
+            "id": "80"
+          },
+          {
+            "id": "84"
+          },
+          {
+            "id": "88"
+          },
+          {
+            "id": "96"
+          }
+        ]
+      }
+    ]
+  }
+}
