@@ -14,7 +14,6 @@ from models.episode import (
     EpisodePatchRequest,
     EpisodeProcessed,
     EpisodeResponse,
-    EpisodeShipped,
 )
 from services.episode import EpisodeService
 
@@ -31,7 +30,6 @@ def get_episodes(  # noqa: PLR0913
     processed: EpisodeProcessed | None = Query(
         None, description="Optional processed filter: DEFAULT, SUCCESS, or ERROR"
     ),
-    shipped: EpisodeShipped | None = Query(None, description="Optional shipped filter: DEFAULT, SUCCESS, or ERROR"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
 ) -> list[EpisodeResponse]:
@@ -42,7 +40,6 @@ def get_episodes(  # noqa: PLR0913
         task_id: Optional task identifier to filter episodes.
         status: Optional status to filter episodes.
         processed: Optional processed status to filter episodes.
-        shipped: Optional shipped status to filter episodes.
         limit: Maximum number of episodes to return (default 100).
         offset: Number of episodes to skip (default 0).
 
@@ -52,12 +49,11 @@ def get_episodes(  # noqa: PLR0913
     Raises:
         HTTPException: If an error occurs during retrieval.
     """
-    logger.debug(f"[GET] /api/v1/episodes | Filters: {status=}, {shipped=}, {task_id=}, {limit=}, {offset=}")
+    logger.debug(f"[GET] /api/v1/episodes | Filters: {status=}, {task_id=}, {limit=}, {offset=}")
     try:
         return episode_service.get_episodes(
             status=status,
             processed=processed.value if processed else None,
-            shipped=shipped.value if shipped else None,
             task_id=task_id,
             limit=limit,
             offset=offset,
@@ -118,15 +114,13 @@ def patch_episode(
     patch: EpisodePatchRequest,
     episode_service: EpisodeService = Depends(get_episode_service),
 ) -> EpisodeResponse:
-    """Patch mutable fields of an episode (shipped, message)."""
+    """Patch mutable fields of an episode (processed, message)."""
     logger.info(f"[PATCH] /api/v1/episodes/{episode_id} | {patch=}")
     try:
         return episode_service.patch_episode(
             episode_id,
             processed=patch.processed.value if patch.processed else None,
-            shipped=patch.shipped.value if patch.shipped else None,
             message=patch.message,
-            object_url=patch.object_url,
         )
     except Exception as e:
         logger.error(f"Failed to patch episode: {e}")

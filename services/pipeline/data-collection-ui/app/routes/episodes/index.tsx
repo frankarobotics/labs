@@ -24,8 +24,7 @@ export async function loader({ context: { DATA_COLLECTION_CLIENT: client } }: Ro
           id: episode.episode_id,
           dateTimeIso: episode.created_at,
           duration: secondsToMMSS(episode.duration_seconds ?? 0),
-          type:
-            episode.label === 'REVIEW_SUCCESS' ? 'success' : episode.label === 'REVIEW_FAILED' ? 'failed' : 'unknown',
+          type: (episode.label ?? 'UNKNOWN').toLowerCase(),
         }) as const,
     )
     .toSorted(({ dateTimeIso: a }, { dateTimeIso: b }) => {

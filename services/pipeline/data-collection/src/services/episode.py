@@ -5,34 +5,29 @@ This module provides the business logic for episode operations.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import json
+import shutil
+from datetime import datetime
+from pathlib import Path
 from uuid import UUID
 
+import uuid7  # type: ignore[import-untyped]
 from loguru import logger
 
 from configs.station import StationConfig
 from configs.tasks import Task
-from models.db import (
-    DeviceDB,
-    EpisodeDB,
-    EpisodeLabelDB,
-    EpisodeProcessedDB,
-    EpisodeShippedDB,
-    EpisodeStatusDB,
-)
 from models.episode import (
+    DeviceInfo,
     EpisodeDeleteResponse,
     EpisodeLabel,
+    EpisodeMetadata,
     EpisodeProcessed,
     EpisodeResponse,
-    EpisodeShipped,
     EpisodeStatus,
 )
-from models.episode_metadata import DeviceInfo, EpisodeMetadata
 from models.record import RecordResponse
 from repos.data_recorder import DataRecorderRepo
-from repos.devices import DeviceRepo
-from repos.episode_metadata import EpisodeMetadataRepo
+from repos.devices import DeviceRecord, DeviceRepo
 from repos.episodes import EpisodeListFilters, EpisodeRepo
 from repos.tasks import TaskRepo
 
@@ -43,281 +38,214 @@ class EpisodeService:
     def __init__(  # noqa: PLR0913
         self,
         data_recorder_repo: DataRecorderRepo,
-        episode_repo: EpisodeRepo,
-        episode_metadata_repo: EpisodeMetadataRepo,
+        raw_episode_repo: EpisodeRepo,
+        processed_episode_repo: EpisodeRepo,
         task_repo: TaskRepo,
         device_repo: DeviceRepo,
         station_config: StationConfig,
+        processed_data_path: str = "/workspace/data/processed_episodes",
     ) -> None:
         """Initialize the episode service.
 
         Args:
             data_recorder_repo: Repository for communicating with the data recorder service.
-            episode_repo: Repository for managing episode database operations.
-            episode_metadata_repo: EpisodeMetadataRepo for writing per-episode metadata files.
+            raw_episode_repo: Filesystem repository for raw episode metadata (written during recording).
+            processed_episode_repo: Filesystem repository for processed episode metadata (read by the API).
             task_repo: Repository for task data access.
-            device_repo: Repository for device data access.
+            device_repo: In-memory repository for device data access.
             station_config: Station configuration.
+            processed_data_path: Base directory for processed episode data.
         """
         self.data_recorder_repo: DataRecorderRepo = data_recorder_repo
-        self.episode_repo: EpisodeRepo = episode_repo
-        self.episode_metadata_repo: EpisodeMetadataRepo = episode_metadata_repo
+        self.raw_episode_repo: EpisodeRepo = raw_episode_repo
+        self.processed_episode_repo: EpisodeRepo = processed_episode_repo
         self.task_repo: TaskRepo = task_repo
         self.device_repo: DeviceRepo = device_repo
         self.station_config: StationConfig = station_config
+        self.processed_data_path: Path = Path(processed_data_path)
 
-    def get_episode_by_id(self, episode_id: UUID) -> EpisodeResponse | None:
-        """Get a single episode by its ID."""
-        episode: EpisodeDB | None = self.episode_repo.get_by_id(episode_id)
-        if episode is None:
-            return None
-        duration: float | None = None
-        if episode.created_at is not None and episode.updated_at is not None:
-            duration = (episode.updated_at - episode.created_at).total_seconds()
+    def _resolve_metadata(self, md: EpisodeMetadata) -> EpisodeMetadata:
+        """Return processed episode_metadata.json if available, otherwise the raw metadata."""
+        try:
+            processed_meta_path = self._get_processed_episode_path(md.episode_id) / "episode_metadata.json"
+            if processed_meta_path.exists():
+                return EpisodeMetadata(**json.loads(processed_meta_path.read_text()))
+        except Exception as e:
+            logger.warning(f"Failed to read processed metadata for {md.episode_id}, falling back to raw: {e}")
+        return md
 
+    def _to_response(self, md: EpisodeMetadata) -> EpisodeResponse:
+        """Convert an EpisodeMetadata model to an EpisodeResponse."""
+        created_at: datetime | None = datetime.fromisoformat(md.created_at) if md.created_at else None
+        updated_at: datetime | None = datetime.fromisoformat(md.updated_at) if md.updated_at else None
+        duration: float | None = (updated_at - created_at).total_seconds() if created_at and updated_at else None
         return EpisodeResponse(
-            episode_id=episode.id,
-            task_id=episode.task_id,
-            station_id=self.station_config.metadata.station_id,
-            status=EpisodeStatus(episode.status),
-            message=episode.message,
-            label=EpisodeLabel(episode.label) if episode.label else None,
-            object_url=episode.object_url,
-            processed=EpisodeProcessed(episode.processed) if episode.processed else EpisodeProcessed.DEFAULT,
-            shipped=EpisodeShipped(episode.shipped) if episode.shipped else EpisodeShipped.DEFAULT,
-            tags=episode.tags,
-            created_at=episode.created_at,
-            updated_at=episode.updated_at,
+            episode_id=md.episode_id,
+            task_id=md.task_id,
+            task_name=md.task_name,
+            task_description=md.task_description,
+            task_version=md.task_version,
+            task_language_instructions=md.task_language_instructions,
+            task_metadata=md.task_metadata,
+            station_id=md.station_id,
+            status=EpisodeStatus(md.status),
+            message=md.message,
+            label=EpisodeLabel(md.label) if md.label else None,
+            processed=EpisodeProcessed(md.processed),
+            tags=md.tags,
+            created_at=created_at,
+            updated_at=updated_at,
             duration_seconds=duration,
         )
 
-    def get_episodes(  # noqa: PLR0913
+    def get_episode_by_id(self, episode_id: UUID) -> EpisodeResponse | None:
+        """Get a single episode by its ID."""
+        md: EpisodeMetadata | None = self.raw_episode_repo.get_by_id(episode_id)
+        if md is None:
+            # Raw episode may have been deleted after processing (delete_raw_episode=true)
+            md = self.processed_episode_repo.get_by_id(episode_id)
+        if md is None:
+            return None
+        return self._to_response(self._resolve_metadata(md))
+
+    def get_episodes(
         self,
         status: str | None = None,
         processed: str | None = None,
-        shipped: str | None = None,
         task_id: UUID | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[EpisodeResponse]:
         """Get episodes with optional filters."""
-        status_enum = None
-        if status:
-            try:
-                status_enum = EpisodeStatusDB(status)
-            except Exception:
-                status_enum = None
         filters = EpisodeListFilters(
-            status=status_enum,
+            status=status,
             processed=processed,
-            shipped=shipped,
             task_id=task_id if task_id else None,
             station_id=self.station_config.metadata.station_id,
             limit=limit,
             offset=offset,
         )
-
-        episodes: Sequence[EpisodeDB] = self.episode_repo.get_all(filters)
-        return [
-            EpisodeResponse(
-                episode_id=ep.id,
-                task_id=ep.task_id,
-                task_name=task.name if task else "",
-                task_description=task.description if task and task.description else "",
-                task_version=task.version if task else None,
-                task_language_instructions=task.language_instructions if task else [],
-                task_metadata=task.metadata if task else {},
-                station_id=self.station_config.metadata.station_id,
-                status=EpisodeStatus(ep.status),
-                label=EpisodeLabel(ep.label) if ep.label else None,
-                object_url=ep.object_url,
-                processed=EpisodeProcessed(ep.processed) if ep.processed else EpisodeProcessed.DEFAULT,
-                shipped=EpisodeShipped(ep.shipped) if ep.shipped else EpisodeShipped.DEFAULT,
-                message=ep.message,
-                tags=ep.tags,
-                created_at=ep.created_at,
-                updated_at=ep.updated_at,
-                duration_seconds=(
-                    (ep.updated_at - ep.created_at).total_seconds()
-                    if ep.created_at is not None and ep.updated_at is not None
-                    else None
-                ),
-            )
-            for ep in episodes
-            for task in [self.task_repo.get_by_id(ep.task_id)]
+        # Scan raw episodes; also include processed-only episodes for the case
+        # where delete_raw_episode=true removed the raw directory after conversion.
+        scan_filters = EpisodeListFilters(
+            status=filters.status,
+            processed=filters.processed,
+            task_id=filters.task_id,
+            station_id=filters.station_id,
+            limit=100_000,
+            offset=0,
+        )
+        raw_episodes: list[EpisodeMetadata] = self.raw_episode_repo.get_all(scan_filters)
+        raw_ids: set[UUID] = {e.episode_id for e in raw_episodes}
+        processed_only: list[EpisodeMetadata] = [
+            e for e in self.processed_episode_repo.get_all(scan_filters) if e.episode_id not in raw_ids
         ]
+        merged = raw_episodes + processed_only
+        merged.sort(key=lambda e: e.created_at or "", reverse=True)
+        paginated = merged[filters.offset : filters.offset + filters.limit]
+        return [self._to_response(self._resolve_metadata(md)) for md in paginated]
 
     def create_episode(self, task_id: UUID, episode_id: UUID) -> None:
-        """Create an episode when its recording is started."""
-        try:
-            # Add entry in the database
-            self.episode_repo.create(
-                id=episode_id,
-                task_id=task_id,
-                station_id=self.station_config.metadata.station_id,
-                status=EpisodeStatusDB.INIT,
+        """Create an episode metadata file when its recording is started."""
+        task: Task | None = self.task_repo.get_by_id(task_id)
+        devices_records: list[DeviceRecord] = self.device_repo.get_all()
+        devices: list[DeviceInfo] = [
+            DeviceInfo(
+                device_id=d.id,
+                device_type=d.type,
+                device_status=d.status,
+                device_config=d.config,
             )
-
-            # Create episode metadata file.
-            try:
-                task: Task | None = self.task_repo.get_by_id(task_id)
-
-                task_name: str = task.name if task else ""
-                task_description: str = task.description if task and task.description else ""
-                task_version: str | None = task.version if task else None
-                task_language_instructions: list[str] = list(task.language_instructions) if task else []
-                task_metadata: dict[str, object] = dict(task.metadata) if task else {}
-
-                # Fetch all devices
-                devices_db: Sequence[DeviceDB] = self.device_repo.get_all()
-                devices: list[DeviceInfo] = [
-                    DeviceInfo(
-                        device_id=device.id,
-                        device_type=device.type,
-                        device_status=device.status,
-                        device_config=device.config,
-                    )
-                    for device in devices_db
-                ]
-
-                metadata = EpisodeMetadata(
-                    episode_id=episode_id,
-                    status=EpisodeStatusDB.INIT,
-                    label=None,
-                    processed=EpisodeProcessedDB.DEFAULT,
-                    shipped=EpisodeShippedDB.DEFAULT,
-                    message="",
-                    tags=[],
-                    task_id=task_id,
-                    task_name=task_name,
-                    task_description=task_description,
-                    task_version=task_version,
-                    task_language_instructions=task_language_instructions,
-                    task_metadata=task_metadata,
-                    station_id=self.station_config.metadata.station_id,
-                    devices=devices,
-                )
-                self.create_episode_metadata(metadata)
-
-            except Exception as e:
-                logger.warning(f"Failed to create episode metadata for {episode_id}: {e}")
-
+            for d in devices_records
+        ]
+        metadata = EpisodeMetadata(
+            episode_id=episode_id,
+            status=EpisodeStatus.INIT,
+            label=None,
+            processed=EpisodeProcessed.DEFAULT,
+            message="",
+            tags=[],
+            task_id=task_id,
+            task_name=task.name if task else "",
+            task_description=task.description if task and task.description else "",
+            task_version=task.version if task else None,
+            task_language_instructions=list(task.language_instructions) if task else [],
+            task_metadata=dict(task.metadata) if task else {},
+            station_id=self.station_config.metadata.station_id,
+            devices=devices,
+        )
+        try:
+            if not self.raw_episode_repo.create(metadata):
+                raise ValueError(f"Episode {episode_id} already exists")
         except Exception as e:
-            # Update entry in the database
-            try:
-                self.update_episode(
-                    episode_id,
-                    task_id=task_id,
-                    station_id=self.station_config.metadata.station_id,
-                    status=EpisodeStatusDB.ERROR,
-                    message=str(e),
-                )
-            except Exception:
-                logger.error(f"Failed to update episode status: {e}")
-            logger.error(f"Failed to start recording: {e}")
-            raise e
+            logger.error(f"Failed to create episode {episode_id}: {e}")
+            raise
 
     def update_episode(  # noqa: PLR0913
         self,
         episode_id: UUID,
         *,
-        task_id: UUID | None = None,
-        station_id: str | None = None,
-        status: EpisodeStatusDB | None = None,
+        status: EpisodeStatus | str | None = None,
         message: str | None = None,
-        label: EpisodeLabelDB | None = None,
-        object_url: str | None = None,
+        label: EpisodeLabel | str | None = None,
         tags: list[str] | None = None,
-        processed: EpisodeProcessedDB | None = None,
-        shipped: EpisodeShippedDB | None = None,
-    ) -> EpisodeDB:
-        """Update episode fields in the database. Only provided (non-None) fields are changed."""
+        processed: EpisodeProcessed | str | None = None,
+    ) -> EpisodeMetadata:
+        """Update episode fields in the metadata file. Only provided (non-None) fields are changed."""
         try:
-            return self.episode_repo.update(
+            return self.raw_episode_repo.update(
                 episode_id,
-                task_id=task_id,
-                station_id=station_id,
                 status=status,
                 message=message,
                 label=label,
-                object_url=object_url,
                 tags=tags,
                 processed=processed,
-                shipped=shipped,
             )
         except Exception as e:
             logger.error(f"Failed to update episode {episode_id}: {e}")
             raise
 
-    def create_episode_metadata(self, metadata: EpisodeMetadata) -> None:
-        """Create the episode metadata file for the given episode."""
-        try:
-            self.episode_metadata_repo.create(metadata)
-            logger.info(f"Episode metadata created successfully for episode {metadata.episode_id}")
-        except Exception as e:
-            logger.warning(f"Failed to create episode metadata for episode {metadata.episode_id}: {e}")
-
-    def update_episode_metadata(  # noqa: PLR0913
-        self,
-        episode_id: UUID,
-        *,
-        status: EpisodeStatusDB | None = None,
-        message: str | None = None,
-        label: EpisodeLabelDB | None = None,
-        tags: list[str] | None = None,
-        processed: EpisodeProcessedDB | None = None,
-        shipped: EpisodeShippedDB | None = None,
-        object_url: str | None = None,
-    ) -> None:
-        """Update the episode metadata file for the given episode. Only provided (non-None) fields are changed."""
-        try:
-            md: EpisodeMetadata | None = self.episode_metadata_repo.read(episode_id)
-            if md is not None:
-                if status is not None:
-                    md.status = status
-                if message is not None:
-                    md.message = message
-                if label is not None:
-                    md.label = label
-                if tags is not None:
-                    md.tags = tags
-                if processed is not None:
-                    md.processed = processed
-                if shipped is not None:
-                    md.shipped = shipped
-                if object_url is not None:
-                    md.object_url = object_url
-                self.episode_metadata_repo.update(md)
-                logger.info(f"Episode metadata updated successfully for episode {episode_id}")
-            else:
-                logger.warning(f"Episode metadata not found for episode {episode_id} when trying to update")
-        except Exception as e:
-            logger.warning(f"Failed to update episode metadata for episode {episode_id}: {e}")
+    def _get_processed_episode_path(self, episode_id: UUID) -> Path:
+        """Resolve the processed episode directory path from a UUIDv7-based episode_id."""
+        dt: datetime = uuid7.time(episode_id)
+        return self.processed_data_path / dt.strftime("%Y") / dt.strftime("%m") / dt.strftime("%d") / str(episode_id)
 
     def delete_episode(self, episode_id: UUID) -> EpisodeDeleteResponse:
-        """Delete an episode and its recording by id."""
-        try:
-            # Delete recording (episode) generated by recorder
-            recorder_response: RecordResponse = self.data_recorder_repo.delete_recording(episode_id)
-            if recorder_response.status != "success":
-                raise Exception(f"DataRecorder failed to delete recording: {recorder_response.message}")
+        """Delete an episode by id.
 
-            # Remove episode row from DB
-            deleted: bool = self.episode_repo.delete(episode_id)
-            if not deleted:
-                logger.warning(f"Episode not found when attempting delete: {episode_id}")
+        Checks for a processed episode first and deletes it if present.
+        Then checks for the raw episode and deletes it if present.
+        Returns 'not_found' only if neither exists.
+        """
+        try:
+            deleted_any: bool = False
+
+            # Delete processed episode directory if it exists
+            processed_path: Path = self._get_processed_episode_path(episode_id)
+            if processed_path.exists():
+                shutil.rmtree(processed_path)
+                logger.info(f"Deleted processed episode directory for {episode_id}")
+                deleted_any = True
+
+            # Delete raw episode if it exists (recorder also removes episode_metadata.json)
+            if self.raw_episode_repo.delete(episode_id):
+                recorder_response: RecordResponse = self.data_recorder_repo.delete_recording(episode_id)
+                if recorder_response.status != "success":
+                    raise Exception(f"DataRecorder failed to delete recording: {recorder_response.message}")
+                logger.info(f"Deleted raw episode recording for {episode_id}")
+                deleted_any = True
+
+            if not deleted_any:
                 return EpisodeDeleteResponse(status="not_found", message="Episode not found")
 
-            logger.info(f"Successfully deleted episode and recording for {episode_id}")
-            return EpisodeDeleteResponse(status="success", message="Deleted recording and episode")
+            logger.info(f"Successfully deleted episode {episode_id}")
+            return EpisodeDeleteResponse(status="success", message="Deleted episode")
 
         except Exception as e:
-            # Attempt to mark episode as error in DB
             try:
-                self.update_episode(episode_id, status=EpisodeStatusDB.ERROR, message=str(e))
+                self.raw_episode_repo.update(episode_id, status=EpisodeStatus.ERROR, message=str(e))
             except Exception:
                 logger.error(f"Failed to update episode status after delete error: {e}")
-
             logger.error(f"Failed to delete episode: {e}")
             return EpisodeDeleteResponse(status="error", message=f"Error deleting episode: {e}")
 
@@ -325,51 +253,32 @@ class EpisodeService:
         self,
         episode_id: UUID,
         processed: str | None = None,
-        shipped: str | None = None,
         message: str | None = None,
-        object_url: str | None = None,
     ) -> EpisodeResponse:
-        """Patch certain mutable fields of an episode (shipped, message).
+        """Patch certain mutable fields of an episode (processed, message).
 
         Returns the updated EpisodeResponse.
         """
-        # Convert processed and shipped to DB enum if provided
-        processed_val = None
-        shipped_val = None
-        if processed is not None:
-            processed_val = EpisodeProcessedDB(processed)
-        if shipped is not None:
-            shipped_val = EpisodeShippedDB(shipped)
+        processed_val = EpisodeProcessed(processed) if processed is not None else None
 
-        updated: EpisodeDB = self.update_episode(
-            episode_id, processed=processed_val, shipped=shipped_val, message=message, object_url=object_url
-        )
+        updated_raw: EpisodeMetadata | None = None
+        updated_processed: EpisodeMetadata | None = None
 
-        duration: float | None = None
-        if updated.created_at is not None and updated.updated_at is not None:
-            duration = (updated.updated_at - updated.created_at).total_seconds()
+        # Keep raw metadata in sync so filtering by `processed` works even when
+        # raw episodes are retained (delete_raw_episode=false).
+        try:
+            updated_raw = self.raw_episode_repo.update(episode_id, processed=processed_val, message=message)
+        except ValueError:
+            logger.debug(f"Raw episode metadata not found for patch: {episode_id}")
 
-        # Update episode metadata file
-        self.update_episode_metadata(
-            episode_id,
-            processed=processed_val,
-            shipped=shipped_val,
-            message=message,
-            object_url=object_url,
-        )
+        # Also update processed metadata if it exists.
+        try:
+            updated_processed = self.processed_episode_repo.update(episode_id, processed=processed_val, message=message)
+        except ValueError:
+            logger.debug(f"Processed episode metadata not found for patch: {episode_id}")
 
-        return EpisodeResponse(
-            episode_id=updated.id,
-            task_id=updated.task_id,
-            station_id=updated.station_id,
-            status=EpisodeStatus(updated.status),
-            message=updated.message,
-            label=EpisodeLabel(updated.label) if updated.label else None,
-            object_url=updated.object_url,
-            processed=EpisodeProcessed(updated.processed),
-            shipped=EpisodeShipped(updated.shipped),
-            tags=updated.tags,
-            created_at=updated.created_at,
-            updated_at=updated.updated_at,
-            duration_seconds=duration,
-        )
+        updated: EpisodeMetadata | None = updated_processed or updated_raw
+        if updated is None:
+            raise ValueError(f"Episode not found: {episode_id}")
+
+        return self._to_response(updated)

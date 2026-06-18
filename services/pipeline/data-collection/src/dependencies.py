@@ -7,16 +7,13 @@ from functools import lru_cache
 from fastapi import Depends
 from fastapi.security import HTTPBearer
 from loguru import logger
-from sqlalchemy.orm import Session
 
 from configs.data_collection import DataCollectionConfig, load_data_collection_config
 from configs.data_recorder import DataRecorderConfig, load_data_recorder_config
 from configs.station import StationConfig, load_station_config
 from configs.tasks import TasksConfig, load_tasks_config
-from db import get_db
 from repos.data_recorder import DataRecorderRepo
 from repos.devices import DeviceRepo
-from repos.episode_metadata import EpisodeMetadataRepo
 from repos.episodes import EpisodeRepo
 from repos.tasks import TaskRepo
 from services.device import DeviceService
@@ -30,6 +27,7 @@ from state_machine.franka_workflow import FrankaWorkflowStateMachine
 from state_machine.recording import RecordingStateMachine
 
 # Global singleton instances
+_device_repo_instance: DeviceRepo | None = None
 _robot_service_instance: FrankaRobotService | None = None
 _workflow_state_machine_instance: FrankaWorkflowStateMachine | None = None
 _recording_state_machine_instance: RecordingStateMachine | None = None
@@ -59,9 +57,14 @@ def get_data_recorder_repo() -> DataRecorderRepo:
     return DataRecorderRepo(config)
 
 
-def get_episode_repo(db: Session = Depends(get_db)) -> EpisodeRepo:
-    """Get the episode repository instance."""
-    return EpisodeRepo(db)
+def get_raw_episode_repo() -> EpisodeRepo:
+    """Get the raw episode repository instance (raw_episodes/)."""
+    return EpisodeRepo("/workspace/data/raw_episodes/")
+
+
+def get_processed_episode_repo() -> EpisodeRepo:
+    """Get the processed episode repository instance (processed_episodes/)."""
+    return EpisodeRepo("/workspace/data/processed_episodes/")
 
 
 def get_task_repo(tasks_config: TasksConfig = Depends(get_tasks_config)) -> TaskRepo:
@@ -69,14 +72,13 @@ def get_task_repo(tasks_config: TasksConfig = Depends(get_tasks_config)) -> Task
     return TaskRepo(tasks_config)
 
 
-def get_device_repo(db: Session = Depends(get_db)) -> DeviceRepo:
-    """Get the device repository instance."""
-    return DeviceRepo(db)
-
-
-def get_episode_metadata_repo() -> EpisodeMetadataRepo:
-    """Get the episode metadata repository instance."""
-    return EpisodeMetadataRepo("/workspace/data/raw_episodes/")
+def get_device_repo() -> DeviceRepo:
+    """Get the device repository singleton instance."""
+    global _device_repo_instance  # noqa: PLW0603
+    if _device_repo_instance is None:
+        _device_repo_instance = DeviceRepo()
+        logger.info("Initialized DeviceRepo singleton")
+    return _device_repo_instance
 
 
 def get_robot_service() -> FrankaRobotService:
@@ -113,22 +115,24 @@ def get_teleop_service(
     return _teleop_service_instance
 
 
-def get_episode_service(
+def get_episode_service(  # noqa: PLR0913
     data_recorder_repo: DataRecorderRepo = Depends(get_data_recorder_repo),
-    episode_repo: EpisodeRepo = Depends(get_episode_repo),
-    episode_metadata_repo: EpisodeMetadataRepo = Depends(get_episode_metadata_repo),
+    raw_episode_repo: EpisodeRepo = Depends(get_raw_episode_repo),
+    processed_episode_repo: EpisodeRepo = Depends(get_processed_episode_repo),
     task_repo: TaskRepo = Depends(get_task_repo),
     device_repo: DeviceRepo = Depends(get_device_repo),
+    config: DataCollectionConfig = Depends(get_data_collection_config),
 ) -> EpisodeService:
     """Get the episode service instance."""
     station_config: StationConfig = load_station_config()
     return EpisodeService(
         data_recorder_repo,
-        episode_repo,
-        episode_metadata_repo,
+        raw_episode_repo,
+        processed_episode_repo,
         task_repo,
         device_repo,
         station_config,
+        config.processed_data_path,
     )
 
 
@@ -176,7 +180,7 @@ def get_task_service(
 def get_system_service(
     recording_sm: RecordingStateMachine = Depends(get_recording_state_machine),
     workflow_sm: FrankaWorkflowStateMachine = Depends(get_workflow_state_machine),
-    episode_repo: EpisodeRepo = Depends(get_episode_repo),
+    episode_repo: EpisodeRepo = Depends(get_raw_episode_repo),
 ) -> SystemService:
     """Get the system service instance."""
     station_config: StationConfig = load_station_config()
