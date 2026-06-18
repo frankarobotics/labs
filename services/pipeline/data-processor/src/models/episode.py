@@ -27,14 +27,6 @@ class EpisodeProcessed(str, Enum):
     ERROR = "ERROR"
 
 
-class EpisodeShipped(str, Enum):
-    """Enum for the shipped state of an episode."""
-
-    DEFAULT = "DEFAULT"
-    SUCCESS = "SUCCESS"
-    ERROR = "ERROR"
-
-
 class EpisodeResponse(BaseModel):
     """Typed response model for episodes coming from the data-collection API."""
 
@@ -53,13 +45,12 @@ class EpisodeResponse(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     duration_seconds: float | None = None
-    shipped: EpisodeShipped | None = None
 
 
 class EpisodePatchRequest(BaseModel):
     """Request model for patching episode data."""
 
-    shipped: EpisodeShipped | None = None
+    processed: EpisodeProcessed | None = None
     message: str | None = None
 
 
@@ -97,7 +88,9 @@ class ConversionMetadata(BaseModel):
     input_file: str
     output_file: str
     camera_topics: list[str]
-    av1_settings: dict[str, str | int | list[int] | None]  # Contains preset, gop_size, pixel_format, threads, nice, cpu_affinity
+    av1_settings: dict[
+        str, str | int | list[int] | None
+    ]  # Contains preset, gop_size, pixel_format, threads, nice, cpu_affinity
     conversion_start_time: datetime
     conversion_end_time: datetime
     conversion_duration_seconds: float
