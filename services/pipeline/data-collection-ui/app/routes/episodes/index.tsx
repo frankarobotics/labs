@@ -14,7 +14,7 @@ export function meta() {
 }
 
 export async function loader({ context: { DATA_COLLECTION_CLIENT: client } }: Route.LoaderArgs) {
-  const episodes = await unwrapOrThrow(client.GET('/api/v1/episodes'))
+  const episodes = await unwrapOrThrow(client.GET('/api/v1/episodes', { params: { query: { limit: 1000 } } }))
 
   const filteredEpisodes = episodes
     .filter((episode) => episode.status === 'SAVED')
@@ -36,10 +36,11 @@ export async function loader({ context: { DATA_COLLECTION_CLIENT: client } }: Ro
 
   return {
     episodes: filteredEpisodes,
+    total: filteredEpisodes.length,
   }
 }
 
-export default function Episodes({ loaderData: { episodes } }: Route.ComponentProps) {
+export default function Episodes({ loaderData: { episodes, total } }: Route.ComponentProps) {
   usePollLoader(1000)
 
   if (episodes.length === 0)
@@ -58,6 +59,7 @@ export default function Episodes({ loaderData: { episodes } }: Route.ComponentPr
         className='screen:-mb-5 relative col-span-2 -mb-3 h-full w-full overflow-hidden'
       >
         <div className='hidden-scrollbar screen:pb-30 col-span-2 flex h-full w-full flex-col gap-1 overflow-x-hidden overflow-y-auto pb-25 text-wrap'>
+          <p className='text text-pastel-grey-400 px-1 pb-1'>{total} episodes</p>
           {episodes.map((episode) => (
             <EpisodeLink key={episode.id} {...episode} />
           ))}

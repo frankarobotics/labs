@@ -24,7 +24,7 @@ export default function EpisodeLink({ id, dateTimeIso, duration, type }: Episode
         )
       }
     >
-      <span className='header'>Episode ...{id.slice(-8)}</span>
+      <span className='header font-mono text-xs'>{id}</span>
       <div className='grid w-full grid-flow-row grid-cols-4'>
         <span suppressHydrationWarning className='text'>
           {date}
