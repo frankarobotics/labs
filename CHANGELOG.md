@@ -44,6 +44,8 @@
   When a controller dies during `READY`/`SYNCING`/`FOLLOWING`, the coordinator attempts to re-activate
   the ready controller and returns to `READY`, falling back to `IDLE` on failure. The workflow mirrors
   this across all coordinators. A toast notification is shown in the UI while recovery is in progress.
+- Recording can now only be started while the workflow is in `FOLLOWING`, and any active recording is
+  automatically stopped (moved to review) when the workflow leaves `FOLLOWING`.
 
 ## [0.1.1] - 2026-06-01
 

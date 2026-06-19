@@ -235,6 +235,7 @@ workspace {
         dataCollectionService -> stationConfig "Loads station configuration"
         dataCollectionService -> workflowSM "Drives workflow transitions"
         dataCollectionService -> recordingSM "Drives recording transitions"
+        workflowSM -> recordingSM "Auto-stops active recording when leaving FOLLOWING (RecordingAutoStopListener)"
         dataCollectionService -> dataRecorderService "Start/stop recording via REST"
         dataProcessorService -> dataCollectionService "Polls episode processed status"
         // datasetBuilder -> dataCollectionService "Fetches manifests & tags"
