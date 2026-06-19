@@ -46,6 +46,7 @@
   this across all coordinators. A toast notification is shown in the UI while recovery is in progress.
 - Recording can now only be started while the workflow is in `FOLLOWING`, and any active recording is
   automatically stopped (moved to review) when the workflow leaves `FOLLOWING`.
+- Reduced device status poll interval to 0.5s, so the system status UI reflects device changes faster.
 
 ## [0.1.1] - 2026-06-01
 

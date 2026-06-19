@@ -12,7 +12,7 @@ class DataCollectionConfig(BaseModel):
     """Configuration for data collection."""
 
     url: str = "0.0.0.0:3001"
-    device_status_poll_interval_sec: int = 5
+    device_status_poll_interval_sec: float = 0.5
     processed_data_path: str = "/workspace/data/processed_episodes"
 
     @classmethod
