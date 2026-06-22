@@ -233,3 +233,6 @@ deployments/*
 tmp
 *.db
 *.tar
+
+# Structurizr Lite cache
+docs/.structurizr/

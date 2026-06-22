@@ -147,7 +147,7 @@ export interface paths {
         put?: never;
         /**
          * Start Syncing
-         * @description Start syncing
+         * @description Start syncing.
          *
          *     Transitions the system from READY to SYNCING state.
          *
@@ -209,7 +209,6 @@ export interface paths {
          *         task_id: Optional task identifier to filter episodes.
          *         status: Optional status to filter episodes.
          *         processed: Optional processed status to filter episodes.
-         *         shipped: Optional shipped status to filter episodes.
          *         limit: Maximum number of episodes to return (default 100).
          *         offset: Number of episodes to skip (default 0).
          *
@@ -261,7 +260,7 @@ export interface paths {
         head?: never;
         /**
          * Patch Episode
-         * @description Patch mutable fields of an episode (shipped, message).
+         * @description Patch mutable fields of an episode (processed, message).
          */
         patch: operations["patch_episode_api_v1_episodes__episode_id__patch"];
         trace?: never;
@@ -548,7 +547,10 @@ export interface components {
          * @enum {string}
          */
         DeviceType: "TELEOP_ROBOT" | "REALSENSE_CAMERA" | "ZED_CAMERA" | "ROBOT_OBSERVER";
-        /** DiscardRecordingResponse */
+        /**
+         * DiscardRecordingResponse
+         * @description Response model for discarding a recording.
+         */
         DiscardRecordingResponse: {
             /** Status */
             status: string;
@@ -576,15 +578,12 @@ export interface components {
         EpisodeLabel: "REVIEW_SUCCESS" | "REVIEW_FAILED";
         /**
          * EpisodePatchRequest
-         * @description Request model used to patch episode fields (shipped and message).
+         * @description Request model used to patch episode fields (processed and message).
          */
         EpisodePatchRequest: {
             processed?: components["schemas"]["EpisodeProcessed"] | null;
-            shipped?: components["schemas"]["EpisodeShipped"] | null;
             /** Message */
             message?: string | null;
-            /** Object Url */
-            object_url?: string | null;
         };
         /**
          * EpisodeProcessed
@@ -607,6 +606,30 @@ export interface components {
              * Format: uuid
              */
             task_id: string;
+            /**
+             * Task Name
+             * @default
+             */
+            task_name: string;
+            /**
+             * Task Description
+             * @default
+             */
+            task_description: string;
+            /** Task Version */
+            task_version?: string | null;
+            /**
+             * Task Language Instructions
+             * @default []
+             */
+            task_language_instructions: string[];
+            /**
+             * Task Metadata
+             * @default {}
+             */
+            task_metadata: {
+                [key: string]: unknown;
+            };
             /** Station Id */
             station_id: string;
             status: components["schemas"]["EpisodeStatus"];
@@ -629,17 +652,7 @@ export interface components {
             duration_seconds?: number | null;
             /** @default DEFAULT */
             processed: components["schemas"]["EpisodeProcessed"];
-            /** @default DEFAULT */
-            shipped: components["schemas"]["EpisodeShipped"];
-            /** Object Url */
-            object_url?: string | null;
         };
-        /**
-         * EpisodeShipped
-         * @description Enumeration for episode shipped status.
-         * @enum {string}
-         */
-        EpisodeShipped: "DEFAULT" | "SUCCESS" | "ERROR";
         /**
          * EpisodeStatus
          * @description Enum for episode status.
@@ -659,14 +672,20 @@ export interface components {
             /** Status */
             status: string;
         };
-        /** SaveRecordingResponse */
+        /**
+         * SaveRecordingResponse
+         * @description Response model for saving a recording.
+         */
         SaveRecordingResponse: {
             /** Status */
             status: string;
             /** Message */
             message: string;
         };
-        /** StartRecordingResponse */
+        /**
+         * StartRecordingResponse
+         * @description Response model for starting a recording.
+         */
         StartRecordingResponse: {
             /**
              * Episode Id
@@ -678,7 +697,10 @@ export interface components {
             /** Message */
             message: string;
         };
-        /** StopRecordingResponse */
+        /**
+         * StopRecordingResponse
+         * @description Response model for stopping a recording.
+         */
         StopRecordingResponse: {
             /** Status */
             status: string;
@@ -912,8 +934,6 @@ export interface operations {
                 status?: string | null;
                 /** @description Optional processed filter: DEFAULT, SUCCESS, or ERROR */
                 processed?: components["schemas"]["EpisodeProcessed"] | null;
-                /** @description Optional shipped filter: DEFAULT, SUCCESS, or ERROR */
-                shipped?: components["schemas"]["EpisodeShipped"] | null;
                 limit?: number;
                 offset?: number;
             };

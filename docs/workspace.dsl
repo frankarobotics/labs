@@ -64,7 +64,7 @@ workspace {
                 dataCollectionService = container "Data Collection Service" "FastAPI services that coordinates teleop workflow, device health, and recorder commands." "FastAPI/Python" {
                     tags "Service"
 
-                    episodeHandlers = component "Episode & Teleop APIs" "FastAPI endpoints for auth, tasks, devices, teleop" "FastAPI" {
+                    episodeHandlers = component "Episode & Teleop APIs" "FastAPI endpoints for tasks, devices, teleop" "FastAPI" {
                         tags "Service"
                     }
                     deviceMonitor = component "Device Monitor" "Background ROS device/topic health monitor thread" "Python" {
@@ -75,7 +75,7 @@ workspace {
                 // NOTE: workflowSM and recordingSM are logical components of dataCollectionService,
                 // but are modelled as containers so that dedicated component views can be rendered for their state diagrams.
                 // They are excluded from DataCollection-Containers to avoid cluttering that view.
-                workflowSM = container "Workflow State Machine" "Manages robot lifecycle transitions: idle → ready → teleop → error (workflow.py)" "Python" {
+                workflowSM = container "Workflow State Machine" "Manages robot lifecycle transitions: idle → ready → syncing → following (workflow.py)" "Python" {
                     tags "StateMachine"
 
                     wfIdle = component "IDLE" "System inactive, no robot controller running" "Python" {
@@ -130,10 +130,6 @@ workspace {
                     tags "Tooling"
                 }
 
-                dataCollectionDB = container "Data Collection DB" "Database storing episode and task metadata" "PostgreSQL" {
-                    tags "Database"
-                }
-
                 stationConfig = container "Station Config & Metadata" "Configuration files for the robot, cameras, teleoperation devices and collected task" "YAML/JSON" {
                     tags "Config"
                 }
@@ -175,7 +171,7 @@ workspace {
 
             storageSystem = softwareSystem "Data Storage" "Dataset and model storage" {
                 tags "StorageSystem"
-                datasets = container "Datasets" "Recorded robot episodes" "File System" {
+                datasets = container "Datasets" "Formatted robot episodes for model training" "File System" {
                     tags "FileStorage"
                 }
                 checkpoints = container "Model Checkpoints" "Fine-tuned model weights" "File System" {
@@ -214,9 +210,6 @@ workspace {
                 fr3DuoRobot = container "FR3 Duo" "Dual arm Franka FR3 robot system" "Physical Robot" {
                     tags "PhysicalRobot"
                 }
-                fr3Follower = container "Franka Follower Controllers" "Follower control stack for Franka robots" "ROS 2" {
-                    tags "ROSInterface"
-                }
             }
         }
 
@@ -231,7 +224,6 @@ workspace {
         dataCollectionService -> dataCollectionUI "Streams live device health and episode event updates"
 
         # Core service interactions
-        dataCollectionService -> dataCollectionDB "Persists episode and task metadata"
         dataCollectionService -> stationConfig "Loads station configuration"
         dataCollectionService -> workflowSM "Drives workflow transitions"
         dataCollectionService -> recordingSM "Drives recording transitions"
@@ -388,11 +380,6 @@ workspace {
             element "Tooling" {
                 background #607d8b
                 color #ffffff
-            }
-            element "Database" {
-                background #8d6e63
-                color #ffffff
-                shape Cylinder
             }
             element "Config" {
                 background #abdda4
@@ -561,11 +548,6 @@ workspace {
             }
             element "StateFollowing" {
                 background #2e7d32
-                color #ffffff
-                shape RoundedBox
-            }
-            element "StateError" {
-                background #c62828
                 color #ffffff
                 shape RoundedBox
             }

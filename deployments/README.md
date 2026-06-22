@@ -47,8 +47,6 @@ The following services are available for deployment. Core services are always re
 
 | Service                  | Required | Notes                                                            |
 | ------------------------ | -------- | ---------------------------------------------------------------- |
-| `postgres`               | ✅       | Database — always required                                       |
-| `migrate`                | ✅       | Runs DB migrations on startup — always required                  |
 | `data-collection`        | ✅       | Core orchestrator — always required                              |
 | `data-recorder`          | ✅       | ROS 2 topic recording — always required                          |
 | `data-collection-ui`     | ✅       | Web UI — always required                                         |

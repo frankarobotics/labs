@@ -9,7 +9,7 @@ from docker.errors import DockerException
 from loguru import logger
 
 from configs.station import StationConfig
-from models.db import EpisodeDB
+from models.episode import EpisodeMetadata
 from models.system import ActiveEpisode, SystemGetResponse
 from repos.episodes import EpisodeRepo
 from state_machine.franka_workflow import FrankaWorkflowStateMachine
@@ -38,12 +38,12 @@ class SystemService:
         episode_id: UUID | None = self.recording_sm.current_episode_id
         if episode_id:
             try:
-                ep: EpisodeDB | None = self.episode_repo.get_by_id(episode_id)
+                ep: EpisodeMetadata | None = self.episode_repo.get_by_id(episode_id)
                 if ep:
                     active_episode = ActiveEpisode(
-                        id=str(ep.id),
+                        id=str(ep.episode_id),
                         status=str(ep.status.value),
-                        started_on=ep.created_at.isoformat() if ep.created_at else None,
+                        started_on=ep.created_at if ep.created_at else None,
                         task_id=str(ep.task_id) if ep.task_id else None,
                     )
             except Exception as e:
@@ -61,8 +61,6 @@ class SystemService:
         """Restart all backend service containers.
 
         This method restarts all data collection service containers except:
-        - Database containers (postgres)
-        - Migration containers (migrate)
         - UI containers (data-collection-ui)
 
         Returns:
@@ -96,8 +94,6 @@ class SystemService:
 
             # Containers to exclude from restart
             excluded_containers: list[str] = [
-                "postgres",
-                "migrate",
                 "data-collection-ui",
             ]
 

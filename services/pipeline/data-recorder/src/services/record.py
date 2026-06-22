@@ -107,20 +107,6 @@ class RecordService:
             return Path(f"{self.output_path}/{dt.strftime('%Y')}/{dt.strftime('%m')}/{dt.strftime('%d')}/{episode_id}")
         raise ValueError(f"Invalid UUID version {episode_id.version} for {episode_id=}")
 
-    def _get_metadata_path(self, episode_id: UUID) -> Path:
-        """Get the metadata file path for an episode.
-
-        Args:
-            episode_id: The unique identifier for the recording episode
-
-        Returns:
-            Path to the metadata file
-        """
-        dt: datetime = uuid7.time(episode_id)
-        return Path(
-            f"{self.config.output_path}/{dt.strftime('%Y')}/{dt.strftime('%m')}/{dt.strftime('%d')}/{episode_id}/record_metadata.json"
-        )
-
     def _get_recording_path(self, episode_id: UUID) -> Path:
         """Get the current recording path.
 
@@ -215,7 +201,6 @@ class RecordService:
 
         # Set size in metadata
         metadata.file_size_bytes = size_bytes
-        metadata.file_size_human = human_readable
 
         logger.info(f"Recorded data size: {human_readable} ({len(mcap_files)} files)")
 
@@ -333,14 +318,10 @@ class RecordService:
                 metadata = RecordMetadata(
                     episode_id=episode_id,
                     topics=self.config.ros_topics,
-                    output_path=str(self.output_path),
-                    metadata_path=str(self._get_metadata_path(episode_id)),
-                    recording_path=str(self._get_recording_path(episode_id)),
                     format="mcap",
                     serialization_format="cdr",
                     recording_software="rosbag2_py",
                     start_timestamp_iso=now.isoformat(),
-                    start_timestamp=now.timestamp(),
                     status="starting",
                 )
                 self.record_metadata_repo.create(metadata)
@@ -475,11 +456,12 @@ class RecordService:
 
         now: datetime = datetime.now(timezone.utc)
         metadata.end_timestamp_iso = now.isoformat()
-        metadata.end_timestamp = now.timestamp()
 
         # Calculate duration correctly
-        if metadata.start_timestamp:
-            metadata.duration_seconds = now.timestamp() - metadata.start_timestamp
+        if metadata.start_timestamp_iso:
+            metadata.duration_seconds = (
+                now.timestamp() - datetime.fromisoformat(metadata.start_timestamp_iso).timestamp()
+            )
 
         # Add file size information
         self._add_file_size_to_metadata(episode_id, metadata)
@@ -610,7 +592,6 @@ class RecordService:
                                 metadata.status = "interrupted"
                                 metadata.error_message = "Recording stopped due to service shutdown"
                                 metadata.end_timestamp_iso = datetime.now(timezone.utc).isoformat()
-                                metadata.end_timestamp = datetime.now(timezone.utc).timestamp()
                                 self.record_metadata_repo.update(metadata)
                         except Exception as e:
                             logger.error(f"Error updating metadata during shutdown: {e}")

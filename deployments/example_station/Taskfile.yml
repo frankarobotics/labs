@@ -12,7 +12,6 @@ vars:
     - data-recorder
     - franka-gello
     - franka-robot
-    - migrate
     - realsense-camera
     - robotiq-gripper
     - zed-camera
@@ -22,12 +21,7 @@ tasks:
     # Cache build dependencies for air-gapped deployments
     cmds:
       - |
-        docker pull postgres:18rc1 || true &
-        docker pull caddy:2.9-alpine || true &
-        docker pull ubuntu:24.04 || true &
         docker pull node:22 || true &
-        docker pull golang:1.25 || true &
-        docker pull debian:bookworm-slim || true &
         docker pull ros:humble-ros-base || true &
         docker pull ros:jazzy-ros-base || true &
         docker pull stereolabs/zed:5.0-devel-cuda12.8-ubuntu24.04 || true &

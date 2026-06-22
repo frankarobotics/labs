@@ -1,5 +1,6 @@
 """Video Encoder component for H.264 encoding with FFmpeg integration."""
 
+import contextlib
 import os
 import subprocess
 import tempfile
@@ -177,7 +178,7 @@ class VideoEncoder:
         # Clamp to reasonable range
         return max(1.0, min(120.0, frame_rate))
 
-    def _encode_with_ffmpeg(
+    def _encode_with_ffmpeg(  # noqa: C901, PLR0915
         self, frames: list[dict[str, Any]], width: int, height: int, frame_rate: float, gop_size: int
     ) -> bytes:
         """Encode frames using FFmpeg with AV1 or H.264 format.
@@ -281,17 +282,13 @@ class VideoEncoder:
 
                 def _set_low_priority() -> None:
                     """Pre-exec hook: lower priority & pin to designated cores."""
-                    try:
+                    with contextlib.suppress(OSError):
                         os.nice(nice_value)
-                    except OSError:
-                        pass
-                    try:
+                    with contextlib.suppress(OSError):
                         if affinity_cores:
                             os.sched_setaffinity(0, affinity_cores)
-                    except OSError:
-                        pass
 
-                result = subprocess.run(
+                result = subprocess.run(  # noqa: S603
                     cmd,
                     capture_output=True,
                     check=False,

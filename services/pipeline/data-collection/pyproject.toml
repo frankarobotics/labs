@@ -15,7 +15,6 @@ dependencies = [
     "mcap-ros2-support>=0.5.5",
     "numpy<2",
     "opencv-python-headless>=4.11.0.86",
-    "psycopg2-binary>=2.9.10",
     "pydantic>=2.11.7",
     "pydantic-settings>=2.10.1",
     "pydantic-yaml>=1.5.1",
@@ -23,7 +22,6 @@ dependencies = [
     "pyyaml>=6.0.2",
     "rclpy-intellisense>=1.2.0",
     "requests>=2.32.4",
-    "sqlalchemy>=2.0.43",
     "uuid7-standard>=1.1.0",
     "uvicorn[standard]>=0.35.0",
 ]

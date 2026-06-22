@@ -1,7 +1,6 @@
 from configs.data_collection import DataCollectionConfig
-from models.db import DeviceDB
-from models.device import DeviceResponse, DeviceStatus, DeviceType
-from repos.devices import DeviceRepo
+from models.device import DeviceResponse, DeviceType
+from repos.devices import DeviceRecord, DeviceRepo
 
 
 class DeviceService:
@@ -14,15 +13,17 @@ class DeviceService:
 
     def get_devices(self, device_type: str | None = None) -> list[DeviceResponse]:
         """Return a list of devices for the configured project."""
-        db_devices: list[DeviceDB] = list(self.repo.get_all())
+        records: list[DeviceRecord] = self.repo.get_all()
 
         devices: list[DeviceResponse] = []
-        for device in db_devices:
+        for device in records:
+            if device_type and device.type != DeviceType(device_type):
+                continue
             devices.append(
                 DeviceResponse(
                     id=device.id,
-                    type=DeviceType(device.type.value),
-                    status=DeviceStatus(device.status.value),
+                    type=device.type,
+                    status=device.status,
                     config=device.config,
                 )
             )
@@ -30,13 +31,13 @@ class DeviceService:
 
     def get_device_by_id(self, device_id: str) -> DeviceResponse | None:
         """Get a device by its ID."""
-        device: DeviceDB | None = self.repo.get_by_id(device_id)
+        device: DeviceRecord | None = self.repo.get_by_id(device_id)
         if not device:
             return None
 
         return DeviceResponse(
             id=device.id,
-            type=DeviceType(device.type.value),
-            status=DeviceStatus(device.status.value),
+            type=device.type,
+            status=device.status,
             config=device.config,
         )

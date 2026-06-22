@@ -211,37 +211,6 @@ services:
     volumes:
       - ./config_data_collection.yml:/workspace/config_data_collection.yml
 
-  migrate:
-    image: registry.localhost/labs/migrate:latest
-    container_name: migrate
-    network_mode: host
-    depends_on:
-      - postgres
-    stdin_open: true
-    tty: true
-    environment:
-      DATABASE_URL: 'postgres://postgres:postgres@localhost:5433/labs?sslmode=disable'
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-
-  postgres:
-    image: postgres:18rc1
-    container_name: postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-labs}
-    ports:
-      - '5433:5432'
-    volumes:
-      - labs_postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER:-postgres}']
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   controller-coordinator:
     image: registry.localhost/labs/controller-coordinator:latest
     container_name: controller-coordinator
@@ -269,6 +238,3 @@ services:
       TERM: ${TERM}
       QT_X11_NO_MITSHM: 1
       TF_CPP_MIN_LOG_LEVEL: 1
-
-volumes:
-  labs_postgres_data:

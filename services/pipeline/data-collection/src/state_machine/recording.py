@@ -4,7 +4,7 @@ from uuid import UUID
 from loguru import logger
 from statemachine import Event, State, StateMachine
 
-from models.db import EpisodeLabelDB, EpisodeStatusDB
+from models.episode import EpisodeLabel, EpisodeStatus
 from repos.data_recorder import DataRecorderRepo
 from services.episode import EpisodeService
 
@@ -41,7 +41,7 @@ class RecordingStateMachine(StateMachine):
     discard = Event(reviewing.to(idle))
 
     def before_start_recording(self, episode_id: UUID, task_id: UUID) -> None:
-        """Create the episode in the database and start the data recorder."""
+        """Create the episode record and start the data recorder."""
         self.current_episode_id = episode_id
         try:
             self.episode_service.create_episode(task_id, episode_id)
@@ -50,11 +50,11 @@ class RecordingStateMachine(StateMachine):
             if recorder_response.status != "success":
                 raise Exception(f"DataRecorder failed to start recording: {recorder_response.message}")
             # Update the status of the episode to recording
-            self.episode_service.update_episode(episode_id, status=EpisodeStatusDB.RECORDING, message="")
+            self.episode_service.update_episode(episode_id, status=EpisodeStatus.RECORDING, message="")
         except Exception as e:
             self.current_episode_id = None
             try:
-                self.episode_service.update_episode(episode_id, status=EpisodeStatusDB.ERROR, message=str(e))
+                self.episode_service.update_episode(episode_id, status=EpisodeStatus.ERROR, message=str(e))
             except Exception:
                 logger.error(f"Failed to update episode status to ERROR for {episode_id}")
             raise
@@ -66,37 +66,27 @@ class RecordingStateMachine(StateMachine):
             recorder_response = self.data_recorder_repo.stop_recording(episode_id)
             if recorder_response.status != "success":
                 raise Exception(f"DataRecorder failed to stop recording: {recorder_response.message}")
-            # Update entry in the database
-            updated_episode = self.episode_service.update_episode(
-                episode_id, status=EpisodeStatusDB.RECORDED, message=""
-            )
-            # Update episode metadata file
-            self.episode_service.update_episode_metadata(
-                episode_id, status=updated_episode.status, message=updated_episode.message
-            )
+            self.episode_service.update_episode(episode_id, status=EpisodeStatus.RECORDED, message="")
             logger.info(f"Successfully stopped recording for episode {episode_id}")
         except Exception as e:
             try:
-                self.episode_service.update_episode(episode_id, status=EpisodeStatusDB.ERROR, message=str(e))
+                self.episode_service.update_episode(episode_id, status=EpisodeStatus.ERROR, message=str(e))
             except Exception:
                 logger.error(f"Failed to update episode status to ERROR for {episode_id}")
             raise
 
-    def before_save(self, label: EpisodeLabelDB, tags: list[str]) -> None:
+    def before_save(self, label: EpisodeLabel, tags: list[str]) -> None:
         """Persist the reviewed episode with a label and tags, then clear the current episode."""
         episode_id = self.current_episode_id
         try:
             self.episode_service.update_episode(
-                episode_id, status=EpisodeStatusDB.SAVED, message="", label=label, tags=tags
-            )
-            self.episode_service.update_episode_metadata(
-                episode_id, status=EpisodeStatusDB.SAVED, message="", label=label, tags=tags
+                episode_id, status=EpisodeStatus.SAVED, message="", label=label, tags=tags
             )
             self.current_episode_id = None
             logger.info(f"Episode {episode_id} saved successfully with label {label} and tags {tags}")
         except Exception as e:
             try:
-                self.episode_service.update_episode(episode_id, status=EpisodeStatusDB.ERROR, message=str(e))
+                self.episode_service.update_episode(episode_id, status=EpisodeStatus.ERROR, message=str(e))
             except Exception:
                 logger.error(f"Failed to update episode status to ERROR for {episode_id}")
             raise
@@ -105,20 +95,18 @@ class RecordingStateMachine(StateMachine):
         """Delete the recording and mark the episode as DISCARDED."""
         episode_id = self.current_episode_id
         try:
+            # Update the status to DISCARDED before deleting the raw directory.
+            # If delete_recording fails, the episode_metadata.json remains on disk with
+            # the correct DISCARDED status instead of the stale REVIEWING status.
+            self.episode_service.update_episode(episode_id, status=EpisodeStatus.DISCARDED, message="")
             recorder_response = self.data_recorder_repo.delete_recording(episode_id)
             if recorder_response.status != "success":
                 raise Exception(f"DataRecorder failed to delete recording: {recorder_response.message}")
-            # Update database entry
-            updated_episode = self.episode_service.update_episode(
-                episode_id, status=EpisodeStatusDB.DISCARDED, message=""
-            )
-            # Update episode metadata file
-            self.episode_service.update_episode_metadata(episode_id, status=updated_episode.status)
             self.current_episode_id = None
             logger.info(f"Episode {episode_id} discarded successfully")
         except Exception as e:
             try:
-                self.episode_service.update_episode(episode_id, status=EpisodeStatusDB.ERROR, message=str(e))
+                self.episode_service.update_episode(episode_id, status=EpisodeStatus.ERROR, message=str(e))
             except Exception:
                 logger.error(f"Failed to update episode status to ERROR for {episode_id}")
             raise

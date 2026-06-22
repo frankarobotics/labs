@@ -8,7 +8,7 @@ import requests
 from loguru import logger
 
 from configs.data_collection import DataCollectionConfig
-from models.episode import EpisodeProcessed, EpisodeResponse, EpisodeShipped, EpisodeStatus
+from models.episode import EpisodeProcessed, EpisodeResponse, EpisodeStatus
 
 HTTP_OK: int = 200
 
@@ -26,16 +26,14 @@ class DataCollectionRepo:
         self,
         status: EpisodeStatus | None = None,
         processed: EpisodeProcessed | None = None,
-        shipped: EpisodeShipped | None = None,
         limit: int = 10000,
         offset: int = 0,
     ) -> list[EpisodeResponse]:
-        """Fetch episodes from data-collection, optionally filtered by `status` and/or `shipped`.
+        """Fetch episodes from data-collection, optionally filtered by `status` and/or `processed`.
 
         Args:
             status: Optional episode status filter.
             processed: Optional processed status filter.
-            shipped: Optional episode shipped status filter.
             limit: Max number of episodes to return.
             offset: Pagination offset.
 
@@ -47,8 +45,6 @@ class DataCollectionRepo:
             params["status"] = status.value
         if processed is not None:
             params["processed"] = processed.value
-        if shipped is not None:
-            params["shipped"] = shipped.value
 
         url: str = f"{self.base_url}/api/v1/episodes"
         try:
@@ -81,15 +77,13 @@ class DataCollectionRepo:
         self,
         episode_id: UUID,
         processed: EpisodeProcessed | None = None,
-        shipped: EpisodeShipped | None = None,
         message: str | None = None,
     ) -> EpisodeResponse:
-        """Update episode shipping status and message via PATCH request.
+        """Update episode processed status and message via PATCH request.
 
         Args:
             episode_id: Episode UUID to update.
             processed: Optional processed status to set on the episode.
-            shipped: New shipping status.
             message: New message content.
 
         Returns:
@@ -97,16 +91,14 @@ class DataCollectionRepo:
 
         Raises:
             requests.RequestException: On HTTP errors.
-            ValueError: If neither shipped nor message is provided.
+            ValueError: If neither processed nor message is provided.
         """
-        if processed is None and shipped is None and message is None:
-            raise ValueError("At least one of processed, shipped or message must be provided")
+        if processed is None and message is None:
+            raise ValueError("At least one of processed or message must be provided")
 
         payload: dict[str, Any] = {}
         if processed is not None:
             payload["processed"] = processed.value
-        if shipped is not None:
-            payload["shipped"] = shipped.value
         if message is not None:
             payload["message"] = message
 
