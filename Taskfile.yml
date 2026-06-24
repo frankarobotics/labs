@@ -173,15 +173,22 @@ tasks:
   # Dataset Builder
   # ---------------------------------------------------------------------------
   #
-  # Quick usage — convert a single episode:
+  # Quick usage — build a dataset from processed episodes:
   #
-  #   task dataset-builder-convert-episode \
-  #     INPUT_MCAP=/workspace/data/processed_episodes/<date>/<uuid>/mcap/mcap_0.mcap \
-  #     DATASET_NAME=<dataset-name>
+  #   task dataset-builder-create DATASET_NAME=<dataset-name>
+  #
+  # Filter by date range, task description, or explicit file:
+  #
+  #   task dataset-builder-create DATASET_NAME=may-data FROM=2026-05-01 TO=2026-05-31
+  #   task dataset-builder-create DATASET_NAME=pick TASK_DESC="Pick red box"
+  #   task dataset-builder-create DATASET_NAME=single INPUT_MCAP=/workspace/data/.../mcap_0.mcap
+  #   task dataset-builder-create DATASET_NAME=my-dataset DRY_RUN=1
+  #   task dataset-builder-create DATASET_NAME=my-dataset INCLUDE_FAILED=1
   #
   # The output is written to /workspace/data/datasets/lerobot/<dataset-name>.
   # Override with OUTPUT_DIR if a non-standard path is needed.
   # DEPLOYMENT_DIR defaults to /workspace/deployments/example_station.
+  # EPISODES_DIR overrides where processed episodes are discovered.
   # Pass extra CLI flags via CLI_ARGS, e.g. CLI_ARGS="--fps 30".
   # Override data paths via DATA_ROOT (default ./data) and DEPLOYMENTS_ROOT (default ./deployments).
   # ---------------------------------------------------------------------------
@@ -195,32 +202,48 @@ tasks:
         vars: { SERVICE: dataset-builder }
       - |
         docker run -it --rm \
-          -v ${DATA_ROOT:-./data}:/workspace/data \
-          -v ${DEPLOYMENTS_ROOT:-./deployments}:/workspace/deployments \
+          -v {{.DATA_ROOT | default (.Env.DATA_ROOT | default "./data")}}:/workspace/data \
+          -v {{.DEPLOYMENTS_ROOT | default (.Env.DEPLOYMENTS_ROOT | default "./deployments")}}:/workspace/deployments \
           {{.DOCKER_REGISTRY}}/labs/dataset-builder:{{.DOCKER_TAG}} \
           {{.CMD}}
 
-  dataset-builder-convert-episode:
-    desc: Convert a single processed MCAP episode to a LeRobot dataset (set INPUT_MCAP, DATASET_NAME; optionally DEPLOYMENT_DIR)
+  dataset-builder-create:
+    desc: "Build a LeRobot dataset from processed episodes (supports filters: FROM, TO, TASK_DESC, EPISODE_ID, EXCLUDE_ID, LIMIT, INCLUDE_FAILED, DRY_RUN; or explicit INPUT_MCAP)"
     vars:
-      INPUT_MCAP: '{{.INPUT_MCAP | default .Env.INPUT_MCAP}}'
       DATASET_NAME: '{{.DATASET_NAME | default (.Env.DATASET_NAME | default "my-dataset")}}'
       DEPLOYMENT_DIR: '{{.DEPLOYMENT_DIR | default (.Env.DEPLOYMENT_DIR | default "/workspace/deployments/example_station")}}'
+      INPUT_MCAP: '{{.INPUT_MCAP | default ""}}'
+      EPISODES_DIR: '{{.EPISODES_DIR | default ""}}'
+      FROM: '{{.FROM | default ""}}'
+      TO: '{{.TO | default ""}}'
+      TASK_DESC: '{{.TASK_DESC | default ""}}'
+      EPISODE_ID: '{{.EPISODE_ID | default ""}}'
+      EXCLUDE_ID: '{{.EXCLUDE_ID | default ""}}'
+      LIMIT: '{{.LIMIT | default ""}}'
+      DRY_RUN: '{{.DRY_RUN | default ""}}'
+      INCLUDE_FAILED: '{{.INCLUDE_FAILED | default ""}}'
     preconditions:
-      - sh: '[ -n "{{.INPUT_MCAP}}" ]'
-        msg: "INPUT_MCAP is required. Usage: task dataset-builder-convert-episode INPUT_MCAP=... DATASET_NAME=..."
       - sh: '[ -n "{{.DATASET_NAME}}" ]'
-        msg: "DATASET_NAME is required. Usage: task dataset-builder-convert-episode INPUT_MCAP=... DATASET_NAME=..."
+        msg: "DATASET_NAME is required. Usage: task dataset-builder-create DATASET_NAME=..."
     cmds:
       - task: build
         vars: { SERVICE: dataset-builder }
       - |
         docker run --rm \
-          -v ${DATA_ROOT:-./data}:/workspace/data \
-          -v ${DEPLOYMENTS_ROOT:-./deployments}:/workspace/deployments \
+          -v {{.DATA_ROOT | default (.Env.DATA_ROOT | default "./data")}}:/workspace/data \
+          -v {{.DEPLOYMENTS_ROOT | default (.Env.DEPLOYMENTS_ROOT | default "./deployments")}}:/workspace/deployments \
           {{.DOCKER_REGISTRY}}/labs/dataset-builder:{{.DOCKER_TAG}} \
           ./entrypoint.sh \
             --dataset-name {{.DATASET_NAME}} \
             --deployment-dir {{.DEPLOYMENT_DIR}} \
-            single --input {{.INPUT_MCAP}} \
+            {{if .INPUT_MCAP}}--input {{.INPUT_MCAP}}{{end}} \
+            {{if .EPISODES_DIR}}--episodes-dir {{.EPISODES_DIR}}{{end}} \
+            {{if .FROM}}--from {{.FROM}}{{end}} \
+            {{if .TO}}--to {{.TO}}{{end}} \
+            {{if .TASK_DESC}}--task "{{.TASK_DESC}}"{{end}} \
+            {{if .EPISODE_ID}}--episode-id {{.EPISODE_ID}}{{end}} \
+            {{if .EXCLUDE_ID}}--exclude-id {{.EXCLUDE_ID}}{{end}} \
+            {{if .LIMIT}}--limit {{.LIMIT}}{{end}} \
+            {{if .DRY_RUN}}--dry-run{{end}} \
+            {{if .INCLUDE_FAILED}}--include-failed{{end}} \
             {{.CLI_ARGS}}

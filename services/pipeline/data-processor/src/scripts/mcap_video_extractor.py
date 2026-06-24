@@ -71,7 +71,7 @@ class MCAPVideoExtractor:
                     message_count += 1
 
                     if message_count % 10000 == 0:
-                        logger.info(f"Processed {message_count} messages...")
+                        logger.debug(f"Processed {message_count} messages...")
 
                     # Check if this is a CompressedVideo topic
                     if schema and schema.name == "foxglove.CompressedVideo":

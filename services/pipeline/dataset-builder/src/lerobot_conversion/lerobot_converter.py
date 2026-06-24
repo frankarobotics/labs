@@ -5,11 +5,12 @@ Conversion pipeline (in order):
   2. Decode frames — decompress each video stream into per-frame images via VideoFrameExtractor.
   3. Synchronize — resample all modalities to a common target-FPS grid via TemporalSynchronizer.
   4. Write Parquet — serialize synchronized observations to chunked Parquet files via LeRobotParquetWriter.
-  5. Write videos — copy the raw compressed video bytes into LeRobot's directory layout via LeRobotVideoWriter.
+  5. Write videos — encode the synchronized frames into target-FPS videos via LeRobotVideoWriter.
   6. Write metadata — generate episodes.jsonl / tasks.jsonl / info.json / modality.json via LeRobotMetadataGenerator.
 """
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -38,8 +39,45 @@ from models.episode_metadata import EpisodeMetadata
 from models.extracted_mcap_data import ExtractedMcapData
 from models.feature import Feature, VideoFeature
 from models.modality_config import ModalityConfig
+from models.observation import Observation
 from models.topic_statistics import TopicStatistics
 from models.video_frame import VideoFrame
+
+
+@dataclass(frozen=True)
+class DatasetSchema:
+    """Feature structure that every episode in a dataset must share.
+
+    LeRobot datasets require identical features across all episodes (same cameras,
+    observation-state layout, and action vector). These three fields are what
+    `LeRobotConverter.finalize_dataset` uses to describe the whole dataset.
+    """
+
+    video_infos: dict[str, dict[str, Any]]
+    observation_names: dict[str, list[str]]
+    action_names: list[str]
+
+    def camera_shapes(self) -> dict[str, tuple[Any, Any, Any]]:
+        """Map each camera name to its (height, width, channels)."""
+        return {
+            name: (info.get("video.height"), info.get("video.width"), info.get("video.channels"))
+            for name, info in self.video_infos.items()
+        }
+
+    def structure_fingerprint(self) -> tuple[Any, ...]:
+        """Return a comparable signature of the schema-defining structure."""
+        cameras = tuple((name, *shape) for name, shape in sorted(self.camera_shapes().items()))
+        observations = tuple((topic, tuple(names)) for topic, names in sorted(self.observation_names.items()))
+        return (cameras, observations, tuple(self.action_names))
+
+
+@dataclass
+class ConvertedEpisode:
+    """Artifacts produced by converting a single episode."""
+
+    episode_metadata: EpisodeMetadata
+    task_definition: dict[str, Any]
+    schema: DatasetSchema
 
 
 class LeRobotConverter:
@@ -89,30 +127,28 @@ class LeRobotConverter:
         self.video_writer = LeRobotVideoWriter(output_dir)
         self.metadata_generator = LeRobotMetadataGenerator(output_dir)
 
-        logger.info(f"LeRobotConverter initialized: {output_dir}")
-        logger.info(f"Target FPS: {target_fps}, Dataset: {dataset_name}")
+        logger.debug(f"LeRobotConverter initialized: {output_dir}")
+        logger.debug(f"Target FPS: {target_fps}, Dataset: {dataset_name}")
 
-    def convert_episode(
-        self, mcap_file: Path, episode_index: int = 0, chunk_index: int | None = None
-    ) -> dict[str, Any]:
-        """Convert a single MCAP file to LeRobot format.
+    def convert_episode(self, mcap_file: Path, episode_index: int = 0) -> ConvertedEpisode:
+        """Convert a single MCAP file to LeRobot episode artifacts (Parquet + videos).
+
+        Does **not** finalize dataset metadata — call `finalize_dataset` once after
+        all episodes have been converted.
 
         Args:
-            mcap_file: Path to input MCAP file
-            episode_index: Episode number
-            task_index: Task identifier
-            chunk_index: Chunk number for organizing data. If omitted, derive it from episode_index.
+            mcap_file: Path to input MCAP file.
+            episode_index: Episode number.
 
         Returns:
-            Episode conversion metadata
+            A `ConvertedEpisode` with all per-episode artifacts.
         """
         logger.info(f"Converting episode {episode_index}: {mcap_file}")
 
         if not mcap_file.exists():
             raise FileNotFoundError(f"MCAP file not found: {mcap_file}")
 
-        if chunk_index is None:
-            chunk_index = episode_index // DEFAULT_CHUNK_SIZE
+        chunk_index = episode_index // DEFAULT_CHUNK_SIZE
 
         try:
             # Step 1: Extract data from MCAP
@@ -133,7 +169,7 @@ class LeRobotConverter:
             episode_meta = self.parquet_writer.write_episode_data(synchronized_data, episode_index, chunk_index)
 
             # Step 5: Write video files
-            video_infos = self._write_video_files(extracted_data.compressed_videos, episode_index, chunk_index)
+            video_infos = self._write_video_files(synchronized_data, episode_index, chunk_index)
 
             # Step 6: Update episode metadata
             episode_meta.mcap_file = str(mcap_file)
@@ -147,25 +183,25 @@ class LeRobotConverter:
             logger.info(f"Episode {episode_index} converted successfully")
             logger.info(f"Generated {len(synchronized_data)} synchronized observations")
 
-            # Finalize dataset
-            metadata_files: dict[str, Path] = self.finalize_dataset(
-                f"Single episode dataset converted from {mcap_file.name}",
-                video_infos,
-                get_observation_names(synchronized_data[0]),
-                get_action_names(synchronized_data[0]),
-                [episode_meta],
-                [task_definition],
+            return ConvertedEpisode(
+                episode_metadata=episode_meta,
+                task_definition=task_definition,
+                schema=DatasetSchema(
+                    video_infos=video_infos,
+                    observation_names=get_observation_names(synchronized_data[0]),
+                    action_names=get_action_names(synchronized_data[0]),
+                ),
             )
 
-            return {"episode_metadata": episode_meta, "metadata_files": metadata_files, "dataset_dir": self.output_dir}
-
         except Exception as e:
-            logger.error(f"Failed to convert episode {episode_index}: {e}")
+            # Try to get the episode UUID for logging purposes; fall back to the full path otherwise.
+            episode_info = mcap_file.parent.parent.name if mcap_file.parent.name == "mcap" else str(mcap_file)
+            logger.error(f"Failed to convert episode {episode_index} ({episode_info}): {e}")
             raise
 
     def _default_task_definition(self) -> dict[str, Any]:
         """Return the default task definition for single-episode conversion."""
-        return {"task_index": 0, "task": self.DEFAULT_TASK_NAME}
+        return {"task": self.DEFAULT_TASK_NAME}
 
     def _load_task_definition(self, metadata: dict[str, Any]) -> dict[str, Any]:
         """Load a task definition from MCAP metadata when available."""
@@ -185,7 +221,7 @@ class LeRobotConverter:
 
         task_description = decoded_context.get("task_description")
         if isinstance(task_description, str) and task_description.strip():
-            return {"task_index": 0, "task": task_description.strip()}
+            return {"task": task_description.strip()}
 
         return self._default_task_definition()
 
@@ -202,13 +238,13 @@ class LeRobotConverter:
         """Finalize dataset by generating all metadata files.
 
         Args:
-            dataset_description: Human-readable dataset description to embed in metadata.
-            video_infos: Video metadata per topic (codecs, dimensions, etc.).
-            observation_names: Observation names grouped by modality.
-            action_topics: Action topic names used in the dataset.
-            episode_metadata: Episode-level metadata entries.
-            task_definitions: Task definitions to write to tasks metadata.
-            additional_info: Optional additional metadata to include.
+            dataset_description: Human-readable dataset description to embed in metadata
+            video_infos: Video metadata per topic (codecs, dimensions, etc.)
+            observation_names: Observation names grouped by modality
+            action_topics: Action topic names used in the dataset
+            episode_metadata: Episode-level metadata entries
+            task_definitions: Task definitions to write to tasks metadata
+            additional_info: Optional additional metadata to include
 
         Returns:
             Dictionary of created metadata file paths.
@@ -225,15 +261,18 @@ class LeRobotConverter:
             # Generate features
             features = self._generate_features(video_infos, observation_names, action_topics)
 
-            # Episodes statistics metadata
-            metadata_files["episodes_stats"] = self.metadata_generator.write_episodes_stats_metadata(0, features)
+            # Episodes statistics metadata (one entry per episode)
+            episode_indices = [meta.episode_index for meta in episode_metadata]
+            metadata_files["episodes_stats"] = self.metadata_generator.write_episodes_stats_metadata(
+                episode_indices, features
+            )
 
             # Tasks metadata
             metadata_files["tasks"] = self.metadata_generator.write_tasks_metadata(task_definitions)
 
             # Dataset info
             metadata_files["info"] = self.metadata_generator.write_dataset_info(
-                episode_metadata, features, int(self.target_fps), additional_info
+                episode_metadata, features, int(self.target_fps), additional_info, total_tasks=len(task_definitions)
             )
 
             # Modality metadata (written when a modality config is available)
@@ -307,25 +346,28 @@ class LeRobotConverter:
         )
 
     def _write_video_files(
-        self, compressed_video: dict[str, CompressedVideoInfo], episode_index: int, chunk_index: int
+        self, synchronized_data: list[Observation], episode_index: int, chunk_index: int
     ) -> dict[str, dict[str, Any]]:
-        """Write video files to LeRobot structure."""
+        """Encode one target-FPS video per camera from the synchronized frames."""
+        if not synchronized_data:
+            raise ValueError(f"No synchronized observations to write videos for (episode {episode_index})")
+
         video_infos = {}
-        for camera_topic, video_data in compressed_video.items():
+        for camera_topic in synchronized_data[0].image:
             # Clean camera name for file system
             camera_alias = self.topic_manifest.get_image_alias(camera_topic) if self.topic_manifest else camera_topic
             camera_name: str = get_video_feature_name(camera_alias)
 
-            video_file: Path = self.video_writer.write_video_file(
-                video_data.data, camera_name, episode_index, chunk_index
-            )
+            frames = [observation.image[camera_topic].image for observation in synchronized_data]
 
-            logger.info(f"Wrote video file: {video_file}")
+            video_file: Path = self.video_writer.write_video_from_frames(
+                frames, camera_name, episode_index, chunk_index, self.target_fps
+            )
 
             video_info = get_video_info(video_file)
             video_infos[camera_topic] = video_info
 
-            logger.info(f"video properties: {json.dumps(video_info)}")
+            logger.debug(f"video properties: {json.dumps(video_info)}")
         return video_infos
 
     def _generate_features(
@@ -410,8 +452,8 @@ class LeRobotConverter:
         logger.info("LeRobotConverter closed")
 
 
-def convert_mcap_to_lerobot(  # noqa: PLR0913
-    mcap_file: Path,
+def convert_mcaps_to_lerobot(  # noqa: PLR0913
+    mcap_files: tuple[Path, ...] | list[Path],
     output_dir: Path,
     target_fps: float = 20.0,
     dataset_name: str = "robot_dataset",
@@ -419,11 +461,11 @@ def convert_mcap_to_lerobot(  # noqa: PLR0913
     recorder_config_path: Path | None = None,
     modality_config_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Convenience function to convert a single MCAP file to LeRobot format.
+    """Convert one or more MCAP files into a single LeRobot dataset.
 
     Args:
-        mcap_file: Path to MCAP file
-        output_dir: Output directory for LeRobot dataset
+        mcap_files: Ordered paths to MCAP files (each becomes one episode)
+        output_dir: Output directory for the LeRobot dataset
         target_fps: Target frame rate
         dataset_name: Dataset name
         station_config_path: Path to config_station.yml
@@ -431,14 +473,80 @@ def convert_mcap_to_lerobot(  # noqa: PLR0913
         modality_config_path: Path to modality.json
 
     Returns:
-        Conversion metadata
+        Conversion result dict with episode metadata, metadata files, and dataset dir
     """
     converter = LeRobotConverter(
         output_dir, target_fps, dataset_name, station_config_path, recorder_config_path, modality_config_path
     )
 
+    all_episode_meta: list[EpisodeMetadata] = []
+    all_task_defs: list[dict[str, Any]] = []
+    reference_episode: ConvertedEpisode | None = None
+
     try:
-        return converter.convert_episode(mcap_file)
+        for episode_index, mcap_file in enumerate(mcap_files):
+            mcap_path = Path(mcap_file)
+
+            converted = converter.convert_episode(mcap_path, episode_index=episode_index)
+
+            if reference_episode is None:
+                reference_episode = converted
+            else:
+                _assert_consistent_structure(reference_episode, converted, episode_index, mcap_path)
+
+            all_episode_meta.append(converted.episode_metadata)
+
+            # Record each distinct task only once, assigning it the next free task index
+            if not any(t["task"] == converted.task_definition["task"] for t in all_task_defs):
+                all_task_defs.append({**converted.task_definition, "task_index": len(all_task_defs)})
+
+        if reference_episode is None:
+            raise ValueError("No MCAP files were provided; cannot build a dataset.")
+
+        description = f"Dataset with {len(all_episode_meta)} episode(s) converted from MCAP files"
+        metadata_files = converter.finalize_dataset(
+            description,
+            reference_episode.schema.video_infos,
+            reference_episode.schema.observation_names,
+            reference_episode.schema.action_names,
+            all_episode_meta,
+            all_task_defs,
+        )
+
+        return {
+            "episode_metadata": all_episode_meta,
+            "metadata_files": metadata_files,
+            "dataset_dir": output_dir,
+        }
 
     finally:
         converter.close()
+
+
+def _assert_consistent_structure(
+    reference: ConvertedEpisode,
+    current: ConvertedEpisode,
+    episode_index: int,
+    mcap_file: Path,
+) -> None:
+    """Raise error if current episode does not share the reference episode's feature structure."""
+    if reference.schema.structure_fingerprint() == current.schema.structure_fingerprint():
+        return
+
+    reference_cameras = reference.schema.camera_shapes()
+    current_cameras = current.schema.camera_shapes()
+
+    differences: list[str] = []
+    if reference_cameras != current_cameras:
+        differences.append(f"cameras: expected {reference_cameras}, got {current_cameras}")
+    if reference.schema.observation_names != current.schema.observation_names:
+        differences.append(
+            f"observation state: expected {reference.schema.observation_names}, got {current.schema.observation_names}"
+        )
+    if reference.schema.action_names != current.schema.action_names:
+        differences.append(f"actions: expected {reference.schema.action_names}, got {current.schema.action_names}")
+
+    raise ValueError(
+        f"Episode {episode_index} ({mcap_file}) has a different structure than the first episode "
+        f"and cannot be combined into one dataset. Differences -> " + "; ".join(differences)
+    )

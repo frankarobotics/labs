@@ -3,13 +3,13 @@
 import tempfile
 from pathlib import Path
 
-import cv2
 import ffmpeg  # type: ignore[import-untyped]
+import numpy as np
 from loguru import logger
 
 from models.video_frame import VideoFrame
 
-COLOR_FRAME_SHAPE_LEN = 3
+BGR_CHANNELS = 3
 
 
 class VideoFrameExtractor:
@@ -24,7 +24,7 @@ class VideoFrameExtractor:
         self.target_fps: float = target_fps
         self.temp_files: list[Path] = []
 
-        logger.info(f"VideoFrameExtractor initialized with target FPS: {target_fps}")
+        logger.debug(f"VideoFrameExtractor initialized with target FPS: {target_fps}")
 
     def extract_frames(
         self, compressed_video_data: bytes, start_timestamp_ns: int, duration_ns: int
@@ -39,8 +39,8 @@ class VideoFrameExtractor:
         Returns:
             List of frame dictionaries with timestamp and image data
         """
-        logger.info(f"Extracting frames from {len(compressed_video_data)} bytes of video data")
-        logger.info(f"Duration: {duration_ns / 1e9:.3f}s, Target FPS: {self.target_fps}")
+        logger.debug(f"Extracting frames from {len(compressed_video_data)} bytes of video data")
+        logger.debug(f"Duration: {duration_ns / 1e9:.3f}s, Target FPS: {self.target_fps}")
 
         frames: list[VideoFrame] = []
         temp_video_path: Path | None = None
@@ -81,71 +81,122 @@ class VideoFrameExtractor:
     def _extract_frames_with_ffmpeg(
         self, video_path: Path, start_timestamp_ns: int, duration_ns: int
     ) -> list[VideoFrame]:
-        """Extract frames using ffmpeg for AV1 videos that OpenCV can't handle."""
-        try:
-            # Calculate target frame count
-            target_frame_count = int(duration_ns / 1e9 * self.target_fps)
-            logger.info(f"Target frame count for {self.target_fps} Hz: {target_frame_count}")
+        """Extract frames by resampling the video to ``target_fps`` in a single ffmpeg pass.
 
-            if target_frame_count == 0:
+        The ``fps`` filter resamples the whole stream in one invocation and streams raw
+        ``bgr24`` frames over a stdout pipe (no temporary image files). Streaming avoids
+        the large temp-disk burst and PNG encode/decode cost of writing frames to disk,
+        and lets ffmpeg determine how many frames the stream actually yields (avoiding
+        tail-seek failures past the end of the stream).
+        """
+        try:
+            target_frame_count = int(duration_ns / 1e9 * self.target_fps)
+            logger.debug(f"Target frame count for {self.target_fps} Hz: {target_frame_count}")
+
+            if target_frame_count <= 0:
                 return []
 
-            # Create temporary directory for frames
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_dir_path = Path(temp_dir)
+            width, height = self._probe_dimensions(video_path)
+            frame_size = width * height * BGR_CHANNELS
 
-                # Calculate time interval between frames
-                frame_interval_s = (duration_ns / 1e9) / target_frame_count if target_frame_count > 0 else 0
+            # Single pass: resample to target fps and stream raw frames over stdout.
+            # ``vframes`` caps the count inside ffmpeg so it stops and exits cleanly on
+            # its own (reading until EOF avoids killing it with a broken pipe). run_async
+            # + incremental reads keep peak memory at one frame, instead of buffering the
+            # entire raw stream (which would be many GiB for long videos).
+            process = (
+                ffmpeg.input(str(video_path))
+                .filter("fps", fps=self.target_fps)
+                .output("pipe:", format="rawvideo", pix_fmt="bgr24", vframes=target_frame_count)
+                .run_async(pipe_stdout=True, pipe_stderr=True)
+            )
 
-                frames: list[VideoFrame] = []
-                for i in range(target_frame_count):
-                    # Calculate seek time for this frame
-                    seek_time_s = i * frame_interval_s
+            frame_interval_ns = duration_ns / target_frame_count
+            frames: list[VideoFrame] = []
+            try:
+                while True:
+                    raw_frame = self._read_exact(process.stdout, frame_size)
+                    if raw_frame is None:
+                        break
 
-                    # Extract single frame at specific timestamp
-                    frame_output: Path = temp_dir_path / f"frame_{i:06d}.png"
+                    # ``np.frombuffer`` yields a read-only view backed by the pipe
+                    # bytes; copy to an owned, writable, contiguous array (matching
+                    # the previous ``cv2.imread`` semantics) and free the raw buffer.
+                    frame_image = np.frombuffer(raw_frame, np.uint8).reshape((height, width, BGR_CHANNELS)).copy()
 
-                    try:
-                        (
-                            ffmpeg.input(str(video_path), ss=seek_time_s)
-                            .output(str(frame_output), vframes=1)
-                            .overwrite_output()
-                            .run(quiet=True, capture_stderr=True)
+                    i = len(frames)
+                    frame_timestamp_ns = start_timestamp_ns + int(i * frame_interval_ns)
+                    frames.append(
+                        VideoFrame(
+                            frame_index=i,
+                            timestamp_ns=frame_timestamp_ns,
+                            video_frame_index=i,
+                            image=frame_image,
+                            height=height,
+                            width=width,
+                            channels=BGR_CHANNELS,
                         )
+                    )
+            finally:
+                process.stdout.close()
+                stderr = process.stderr.read()
+                process.stderr.close()
+                returncode = process.wait()
 
-                        if frame_output.exists():
-                            # Load frame with OpenCV
-                            frame_image = cv2.imread(str(frame_output))
-                            if frame_image is not None:
-                                frame_timestamp_ns = start_timestamp_ns + int(i * (duration_ns / target_frame_count))
+            if returncode != 0:
+                detail = stderr.decode(errors="replace") if stderr else "unknown error"
+                raise RuntimeError(f"ffmpeg exited with code {returncode}: {detail}")
 
-                                frame_data = VideoFrame(
-                                    frame_index=i,
-                                    timestamp_ns=frame_timestamp_ns,
-                                    video_frame_index=i,  # Approximate
-                                    image=frame_image.copy(),
-                                    height=frame_image.shape[0],
-                                    width=frame_image.shape[1],
-                                    channels=frame_image.shape[2]
-                                    if len(frame_image.shape) == COLOR_FRAME_SHAPE_LEN
-                                    else 1,
-                                )
-                                frames.append(frame_data)
-                        else:
-                            logger.warning(f"Failed to extract frame {i} with ffmpeg")
+            if len(frames) < target_frame_count:
+                # Expected when the stream is slightly shorter than the
+                # timestamp-derived duration; downstream sync tolerates it.
+                logger.warning(
+                    f"ffmpeg produced {len(frames)} frames, expected {target_frame_count} "
+                    f"(stream shorter than timestamp duration)"
+                )
 
-                    except ffmpeg.Error as e:
-                        logger.warning(
-                            f"FFmpeg failed to extract frame {i}: {e.stderr.decode() if e.stderr else str(e)}"
-                        )
-                        continue
-
-                logger.info(f"Extracted {len(frames)} frames using ffmpeg")
-                return frames
+            logger.debug(f"Extracted {len(frames)} frames using ffmpeg (single pass)")
+            return frames
 
         except Exception as e:
             logger.error(f"FFmpeg frame extraction failed: {e}")
             raise
+
+    def _probe_dimensions(self, video_path: Path) -> tuple[int, int]:
+        """Return the (width, height) of the first video stream.
+
+        Raw frames carry no headers, so the pixel dimensions must be known up front to
+        reshape the byte stream into images.
+        """
+        probe = ffmpeg.probe(str(video_path))
+        video_stream = next(
+            (stream for stream in probe.get("streams", []) if stream.get("codec_type") == "video"),
+            None,
+        )
+        if video_stream is None:
+            raise ValueError(f"No video stream found in {video_path}")
+
+        return int(video_stream["width"]), int(video_stream["height"])
+
+    @staticmethod
+    def _read_exact(stream: object, size: int) -> bytes | None:
+        """Read exactly ``size`` bytes from a pipe, or ``None`` at clean end-of-stream.
+
+        A single ``read`` on a pipe may return fewer bytes than requested, so loop until
+        the full frame is collected. A partial trailing read indicates a truncated frame.
+        """
+        chunks: list[bytes] = []
+        remaining = size
+        while remaining > 0:
+            chunk = stream.read(remaining)  # type: ignore[attr-defined]
+            if not chunk:
+                if chunks:
+                    logger.warning(f"Discarding truncated final frame ({size - remaining}/{size} bytes)")
+                return None
+            chunks.append(chunk)
+            remaining -= len(chunk)
+
+        return b"".join(chunks)
 
     def close(self) -> None:
         """Clean up temporary files."""
@@ -155,4 +206,4 @@ class VideoFrameExtractor:
                 logger.debug(f"Cleaned up temporary file: {temp_file}")
 
         self.temp_files.clear()
-        logger.info("VideoFrameExtractor closed")
+        logger.debug("VideoFrameExtractor closed")

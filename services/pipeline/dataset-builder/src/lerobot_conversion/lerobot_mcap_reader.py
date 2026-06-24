@@ -1,6 +1,8 @@
 """LeRobot MCAP Reader for extracting CompressedVideo and robot state data."""
 
 import json
+from collections import defaultdict
+from collections.abc import Callable
 from itertools import pairwise
 from pathlib import Path
 from typing import Any
@@ -25,15 +27,58 @@ from models.topic_info import TopicInfo
 from models.topic_statistics import TopicStatistics
 
 
+class _DecodeFailed:
+    """Sentinel yielded for messages that could not be decoded."""
+
+
+DECODE_FAILED = _DecodeFailed()
+
+
+class ResilientDecoderFactory:
+    """Wraps a decoder factory so a single message's decode error is non-fatal.
+
+    The mcap library still owns decoding and per-channel decoder caching via
+    ``iter_decoded_messages``; this decorator only intercepts the per-message
+    decode call so a malformed message yields :data:`DECODE_FAILED` instead of
+    raising and aborting iteration over the rest of the file.
+    """
+
+    def __init__(self, inner: Any) -> None:  # noqa: ANN401 - mcap DecoderFactory protocol
+        """Wrap an existing decoder factory to make per-message decode failures non-fatal."""
+        self._inner = inner
+
+    def decoder_for(self, message_encoding: str, schema: Schema | None) -> Callable[[bytes], Any] | None:
+        """Return a safe decoder that yields `DECODE_FAILED` instead of raising on bad messages."""
+        decoder = self._inner.decoder_for(message_encoding, schema)
+        if decoder is None:
+            return None
+
+        def safe_decoder(data: bytes) -> Any:  # noqa: ANN401
+            try:
+                return decoder(data)
+            except Exception as e:
+                schema_name = schema.name if schema else "None"
+                # Per-message detail is logged at DEBUG to avoid flooding the logs;
+                # the reader emits an aggregated per-topic summary at INFO/WARNING.
+                logger.debug(f"Failed to decode message (schema={schema_name}, encoding={message_encoding}): {e}")
+                return DECODE_FAILED
+
+        return safe_decoder
+
+
 class LeRobotMCAPReader:
     """MCAP reader specialized for LeRobot dataset conversion."""
 
     def __init__(self, topic_manifest: DatasetTopicManifest | None = None) -> None:
         """Initialize LeRobot MCAP reader."""
-        logger.info("LeRobot MCAP Reader initialized")
-        # Include both ROS 2 CDR and Foxglove protobuf decoder factories
-        self.decoder_factories = [DecoderFactory(), ProtobufDecoderFactory()]
+        logger.debug("LeRobot MCAP Reader initialized")
         self.topic_manifest = topic_manifest
+        # Topics already reported as "ignored" during the current extraction, so each
+        # is logged once instead of per message. Reset at the start of every extract.
+        self._logged_ignored_topics: set[str] = set()
+        # Topics whose message payload did not match the expected schema, logged once
+        # per topic instead of per message. Reset at the start of every extract.
+        self._logged_state_extraction_errors: set[str] = set()
 
     def extract_lerobot_data(self, mcap_path: Path) -> ExtractedMcapData:
         """Extract all data needed for LeRobot conversion."""
@@ -44,12 +89,18 @@ class LeRobotMCAPReader:
         actions: dict[str, list[RobotAction]] = {}
         metadata: dict[str, Any] = {}
 
+        # Per-extraction log de-duplication / aggregation to keep logs readable
+        # even when many messages are ignored or undecodable.
+        self._logged_ignored_topics = set()
+        self._logged_state_extraction_errors = set()
+        undecodable_counts: defaultdict[str, int] = defaultdict(int)
+
         try:
             with open(mcap_path, "rb") as f:
-                reader = mcap.reader.make_reader(f, decoder_factories=self.decoder_factories)
+                reader = mcap.reader.make_reader(f, decoder_factories=self._build_decoder_factories())
                 mcap_summary = self._get_mcap_summary(reader)
 
-                logger.info(f"Found topics: {list(mcap_summary.topics.keys())}")
+                logger.debug(f"Found topics: {list(mcap_summary.topics.keys())}")
 
                 message_count = 0
 
@@ -57,9 +108,13 @@ class LeRobotMCAPReader:
                     message_count += 1
 
                     if message_count % 5000 == 0:
-                        logger.info(f"Processed {message_count} messages...")
+                        logger.debug(f"Processed {message_count} messages...")
 
                     topic_name: str = channel.topic
+
+                    if ros_message is DECODE_FAILED:
+                        undecodable_counts[topic_name] += 1
+                        continue
 
                     try:
                         self._handle_message(
@@ -69,6 +124,11 @@ class LeRobotMCAPReader:
                         logger.error(f"Error processing message {message.log_time} on topic {topic_name}: {e}")
 
                 logger.info(f"Extracted {message_count} total messages")
+
+                if undecodable_counts:
+                    total_undecodable = sum(undecodable_counts.values())
+                    per_topic = ", ".join(f"{topic} ({count})" for topic, count in sorted(undecodable_counts.items()))
+                    logger.warning(f"Skipped {total_undecodable} undecodable messages across topics: {per_topic}")
 
                 if self.topic_manifest is not None:
                     compressed_videos = self.topic_manifest.order_image_topics(compressed_videos)
@@ -165,9 +225,12 @@ class LeRobotMCAPReader:
         if self._is_ignored_topic(topic_name, schema):
             return
 
-        logger.info(
-            f"Ignoring topic outside configured manifest {topic_name} with schema {schema.name if schema else 'None'}"
-        )
+        if topic_name not in self._logged_ignored_topics:
+            self._logged_ignored_topics.add(topic_name)
+            logger.info(
+                f"Ignoring topic outside configured manifest {topic_name} "
+                f"with schema {schema.name if schema else 'None'}"
+            )
 
     def _handle_state_topic(
         self,
@@ -254,6 +317,18 @@ class LeRobotMCAPReader:
         # /robotiq_gripper/right/f_30hz/robotiq_2f_gripper/finger_distance_mm
         return "gripper" in topic_name.lower() and ("finger_distance_mm" in topic_name.lower())
 
+    def _build_decoder_factories(self) -> list[Any]:
+        """Build fresh decoder factories for a single MCAP file.
+
+        Factories cache decoders by ``schema.id``, which is only unique within one
+        file. Reusing a factory across files can return the wrong decoder when ids
+        collide, so each file gets its own.
+        """
+        return [
+            ResilientDecoderFactory(DecoderFactory()),
+            ResilientDecoderFactory(ProtobufDecoderFactory()),
+        ]
+
     def _get_mcap_summary(self, reader: mcap.reader.McapReader) -> McapSummary:
         summary = reader.get_summary()
 
@@ -284,6 +359,15 @@ class LeRobotMCAPReader:
             message_count=channel_message_count or 0,
         )
 
+    def _log_extraction_error_once(self, topic_name: str, schema_type: str, error: Exception) -> None:
+        """Log a schema-extraction failure once per topic to avoid per-message log spam."""
+        if topic_name not in self._logged_state_extraction_errors:
+            self._logged_state_extraction_errors.add(topic_name)
+            logger.error(
+                f"Failed to extract {schema_type} from {topic_name} "
+                f"(payload does not match {schema_type} schema, logged once per topic): {error}"
+            )
+
     def _handle_compressed_video(
         self,
         topic_name: str,
@@ -312,7 +396,7 @@ class LeRobotMCAPReader:
             )
 
         except Exception as e:
-            logger.error(f"Failed to extract CompressedVideo from {topic_name}: {e}")
+            self._log_extraction_error_once(topic_name, "CompressedVideo", e)
 
     def _handle_joint_state(
         self,
@@ -336,7 +420,7 @@ class LeRobotMCAPReader:
             robot_states[topic_name].append(robot_state)
 
         except Exception as e:
-            logger.error(f"Failed to extract JointState from {topic_name}: {e}")
+            self._log_extraction_error_once(topic_name, "JointState", e)
 
     def _handle_pose_stamped(
         self,
@@ -382,7 +466,7 @@ class LeRobotMCAPReader:
             robot_states[topic_name].append(robot_state)
 
         except Exception as e:
-            logger.error(f"Failed to extract PoseStamped from {topic_name}: {e}")
+            self._log_extraction_error_once(topic_name, "PoseStamped", e)
 
     def _handle_joint_state_action(
         self,
@@ -406,7 +490,7 @@ class LeRobotMCAPReader:
             actions[topic_name].append(action)
 
         except Exception as e:
-            logger.error(f"Failed to extract JointState action from {topic_name}: {e}")
+            self._log_extraction_error_once(topic_name, "JointState", e)
 
     def _handle_twist_stamped(
         self,
@@ -450,7 +534,7 @@ class LeRobotMCAPReader:
             actions[topic_name].append(action)
 
         except Exception as e:
-            logger.error(f"Failed to extract TwistStamped from {topic_name}: {e}")
+            self._log_extraction_error_once(topic_name, "TwistStamped", e)
 
     def _handle_wrench_stamped(
         self,
@@ -493,7 +577,7 @@ class LeRobotMCAPReader:
             robot_states[topic_name].append(robot_state)
 
         except Exception as e:
-            logger.error(f"Failed to extract WrenchStamped from {topic_name}: {e}")
+            self._log_extraction_error_once(topic_name, "WrenchStamped", e)
 
     def _handle_float32(
         self,

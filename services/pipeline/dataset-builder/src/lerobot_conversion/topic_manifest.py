@@ -107,18 +107,20 @@ def load_topic_manifest(  # noqa: C901
 
     for teleop_robot in teleop_robots:
         config = teleop_robot.get("config", {})
+        namespace = config.get("namespace")
 
         leader_topic = config.get("leader_topic")
         if leader_topic:
-            ignored_topics.append(leader_topic)
+            ignored_topics.append(_apply_namespace(namespace, str(leader_topic)))
 
         follower_topic = config.get("follower_topic")
         if follower_topic:
-            action_topics.append(follower_topic)
+            action_topics.append(_apply_namespace(namespace, str(follower_topic)))
 
-        observation_state_topics.extend(config.get("observer_topics") or [])
-        for topic in config.get("observer_topics") or []:
-            observation_state_aliases.setdefault(str(topic), _to_safe_name(str(topic)))
+        for observer_topic in config.get("observer_topics") or []:
+            namespaced_topic = _apply_namespace(namespace, str(observer_topic))
+            observation_state_topics.append(namespaced_topic)
+            observation_state_aliases.setdefault(namespaced_topic, _to_safe_name(namespaced_topic))
 
     observation_image_topics = _deduplicate_preserve_order(observation_image_topics)
     observation_state_topics = _deduplicate_preserve_order(observation_state_topics)
@@ -210,6 +212,22 @@ def _filter_recorded_topics(topics: list[str], recorder_topics: set[str], label:
         else:
             logger.warning(f"Skipping configured {label} topic not present in recorder config: {topic}")
     return filtered_topics
+
+
+def _apply_namespace(namespace: str | None, topic: str) -> str:
+    """Resolve a teleop topic to its absolute, namespaced form.
+
+    Teleop ``leader_topic``/``follower_topic`` entries are relative (e.g.
+    ``follower/gello/joint_states``) and rely on the robot's ``namespace`` to
+    form the recorded topic (e.g. ``/left/follower/gello/joint_states``).
+    Topics that are already absolute are returned unchanged.
+    """
+    topic = topic.strip()
+    if topic.startswith("/"):
+        return topic
+    if not namespace:
+        return f"/{topic}"
+    return f"/{namespace.strip('/')}/{topic}"
 
 
 def _build_camera_alias(observer_id: str, config_name: str, config: dict[str, Any]) -> str:

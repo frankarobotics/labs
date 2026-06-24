@@ -93,7 +93,7 @@ class MCAPReader:
                     message_count += 1
 
                     if message_count % 1000 == 0:
-                        logger.info(f"Processed {message_count} messages...")
+                        logger.debug(f"Processed {message_count} messages...")
 
                     topic_name: str = channel.topic
 

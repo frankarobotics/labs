@@ -38,7 +38,7 @@ class LeRobotParquetWriter:
         # Create directories
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f"LeRobotParquetWriter initialized: {output_dir}")
+        logger.debug(f"LeRobotParquetWriter initialized: {output_dir}")
 
     def write_episode_data(
         self, synchronized_data: list[Observation], episode_index: int, chunk_index: int
