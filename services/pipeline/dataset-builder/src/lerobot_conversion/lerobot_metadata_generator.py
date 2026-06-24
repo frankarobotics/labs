@@ -26,7 +26,7 @@ class LeRobotMetadataGenerator:
         self.meta_dir: Path = output_dir / "meta"
         self.meta_dir.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f"LeRobotMetadataGenerator initialized: {self.meta_dir}")
+        logger.debug(f"LeRobotMetadataGenerator initialized: {self.meta_dir}")
 
     def write_episodes_metadata(self, episodes_metadata: list[EpisodeMetadata]) -> Path:
         """Write episodes.jsonl file.
@@ -69,8 +69,12 @@ class LeRobotMetadataGenerator:
         logger.info(f"Wrote {len(task_definitions)} tasks to {tasks_file}")
         return tasks_file
 
-    def write_episodes_stats_metadata(self, episode_index: int, features: dict[str, Feature]) -> Path:
-        """Write episodes_stats.jsonl file.
+    def write_episodes_stats_metadata(self, episode_indices: list[int], features: dict[str, Feature]) -> Path:
+        """Write episodes_stats.jsonl file with one entry per episode.
+
+        Args:
+            episode_indices: Episode indices to write stats for.
+            features: Feature definitions used to shape the (zero-filled) stats.
 
         Returns:
             Path to episodes_stats.jsonl file
@@ -81,7 +85,7 @@ class LeRobotMetadataGenerator:
         # by producing zero-filled stats, which downstream consumers recompute on load.
         episode_buffer: dict[str, list[str] | np.ndarray] = {}
         episode_stats = compute_episode_stats(
-            episode_buffer, {key: feature.to_dict for key, feature in features.items()}
+            episode_buffer, {key: feature.to_dict() for key, feature in features.items()}
         )
 
         # Re-create the episodes_stats_file to ensure it's fresh
@@ -89,9 +93,10 @@ class LeRobotMetadataGenerator:
             episodes_stats_file.unlink()
         episodes_stats_file.touch()
 
-        write_episode_stats(episode_index, episode_stats, self.output_dir)
+        for episode_index in episode_indices:
+            write_episode_stats(episode_index, episode_stats, self.output_dir)
 
-        logger.info(f"Wrote episodes stats to {episodes_stats_file}")
+        logger.info(f"Wrote stats for {len(episode_indices)} episode(s) to {episodes_stats_file}")
         return episodes_stats_file
 
     def write_dataset_info(
@@ -100,6 +105,7 @@ class LeRobotMetadataGenerator:
         features: dict[str, Feature],
         fps: int = 20,
         additional_info: dict[str, Any] | None = None,
+        total_tasks: int = 1,
     ) -> Path:
         """Write info.json file.
 
@@ -108,6 +114,7 @@ class LeRobotMetadataGenerator:
             features: Feature definitions from Parquet data
             fps: Dataset frame rate
             additional_info: Optional additional metadata
+            total_tasks: Number of distinct tasks in the dataset
 
         Returns:
             Path to info.json file
@@ -125,8 +132,8 @@ class LeRobotMetadataGenerator:
             "robot_type": None,
             "total_episodes": total_episodes,
             "total_frames": total_frames,
-            "total_tasks": 1,
-            "total_videos": len([f for f in features if features[f].dtype == "video"]),
+            "total_tasks": total_tasks,
+            "total_videos": sum(1 for f in features.values() if f.dtype == "video") * total_episodes,
             "total_chunks": total_chunks,
             "chunks_size": DEFAULT_CHUNK_SIZE,
             "fps": int(fps),

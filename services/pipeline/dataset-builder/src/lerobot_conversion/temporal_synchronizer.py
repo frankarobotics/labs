@@ -18,6 +18,7 @@ from models.video_frame import VideoFrame
 
 START_TIME_TOLERANCE_NS = int(1 * 1e9)  # 1 second
 END_TIME_TOLERANCE_NS = int(1 * 1e9)  # 1 second
+MIN_EPISODE_SAMPLES = 2
 
 
 class SynchronizationError(RuntimeError):
@@ -36,7 +37,7 @@ class TemporalSynchronizer:
         self.target_fps: float = target_fps
         self.frame_interval_ns = int(1e9 / target_fps)  # Nanoseconds between frames
 
-        logger.info(f"TemporalSynchronizer initialized at {target_fps} Hz ({self.frame_interval_ns}ns intervals)")
+        logger.debug(f"TemporalSynchronizer initialized at {target_fps} Hz ({self.frame_interval_ns}ns intervals)")
 
     def synchronize_episode_data(
         self,
@@ -76,13 +77,23 @@ class TemporalSynchronizer:
 
         duration_ns = end_time_ns - start_time_ns
 
-        logger.info(f"Time bounds: {start_time_ns} to {end_time_ns} ({duration_ns / 1e9:.3f}s)")
+        logger.debug(f"Time bounds: {start_time_ns} to {end_time_ns} ({duration_ns / 1e9:.3f}s)")
 
         # Generate target-FPS timestamp grid
         num_samples: int = int(duration_ns / self.frame_interval_ns) + 1
+
+        if num_samples < MIN_EPISODE_SAMPLES:
+            # A single (or zero-length) sample means the recording spans less than one
+            # frame interval — almost always a truncated/aborted capture. Reject it
+            # clearly instead of emitting a 1-row episode and dividing by a 0s duration.
+            raise SynchronizationError(
+                f"Episode spans only {duration_ns / 1e9:.3f}s "
+                f"(< one {1e9 / self.target_fps / 1e6:.0f}ms frame interval); too short to synchronize"
+            )
+
         target_timestamps_ns = np.linspace(start_time_ns, end_time_ns, num_samples, dtype=np.int64)
 
-        logger.info(f"Generating {len(target_timestamps_ns)} samples at {self.target_fps} Hz")
+        logger.debug(f"Generating {len(target_timestamps_ns)} samples at {self.target_fps} Hz")
 
         # Synchronize each modality
         sync_videos = self._synchronize_videos(videos, target_timestamps_ns)
@@ -247,7 +258,7 @@ class TemporalSynchronizer:
         synchronized_videos: dict[str, list[ObservationImage]] = {}
 
         for topic, frames in videos.items():
-            logger.info(f"Synchronizing video topic: {topic} ({len(frames)} frames)")
+            logger.debug(f"Synchronizing video topic: {topic} ({len(frames)} frames)")
             sync_frames = self._synchronize_frames(frames, target_timestamps_ns)
             synchronized_videos[topic] = sync_frames
 
@@ -304,7 +315,7 @@ class TemporalSynchronizer:
         synchronized_states: dict[str, list[ObservationState]] = {}
 
         for topic, states in robot_states.items():
-            logger.info(f"Synchronizing robot state topic: {topic} ({len(states)} samples)")
+            logger.debug(f"Synchronizing robot state topic: {topic} ({len(states)} samples)")
 
             # Extract timestamps
             state_times = np.array([state.timestamp_ns for state in states])
@@ -362,7 +373,7 @@ class TemporalSynchronizer:
         synchronized_actions: dict[str, list[ObservationAction]] = {}
 
         for topic, topic_actions in actions.items():
-            logger.info(f"Synchronizing action topic: {topic} ({len(topic_actions)} samples)")
+            logger.debug(f"Synchronizing action topic: {topic} ({len(topic_actions)} samples)")
 
             # Extract timestamps and action values
             action_times = np.array([action.timestamp_ns for action in topic_actions])
@@ -411,10 +422,12 @@ class TemporalSynchronizer:
         if not observations:
             return {}
 
+        duration_seconds = (observations[-1].timestamp_ns - observations[0].timestamp_ns) / 1e9
+
         stats: dict[str, Any] = {
             "total_samples": len(observations),
-            "duration_seconds": (observations[-1].timestamp_ns - observations[0].timestamp_ns) / 1e9,
-            "actual_fps": len(observations) / ((observations[-1].timestamp_ns - observations[0].timestamp_ns) / 1e9),
+            "duration_seconds": duration_seconds,
+            "actual_fps": (len(observations) / duration_seconds) if duration_seconds > 0 else 0.0,
             "target_fps": self.target_fps,
         }
 

@@ -40,9 +40,9 @@ class VideoEncoder:
             # Preset 8 provides balanced encoding speed and compression for robotics data (equivalent to "medium")
             "preset": 8,
             # GOP (Group Of Pictures) size: number of frames between keyframes (I-frames).
-            # LeRobot uses GOP=2 for frequent keyframes, enabling better random access
-            # which is crucial for robotics applications where frame-level seeking is common.
-            "gop_size": 2,
+            # ~1 keyframe per second @30fps keeps Foxglove scrubbing of the processed MCAP smooth
+            # Dataset-builder re-encodes with its own (smaller) GOP for frame-level training seeks.
+            "gop_size": 30,
             # Pixel format: chroma subsampling and layout. "yuv420p" is 8-bit 4:2:0 planar and widely compatible.
             # LeRobot standard format for broad compatibility with visualization tools.
             "pixel_format": "yuv420p",
@@ -115,7 +115,7 @@ class VideoEncoder:
         frame_rate: float = self._calculate_frame_rate(sorted_frames)
         logger.info(f"Calculated frame rate: {frame_rate:.2f} FPS")
 
-        # Use configured GOP size from LeRobot settings (GOP=2 for frequent keyframes)
+        # Use configured GOP size
         gop_size: int = self.codec_settings["gop_size"]
 
         try:

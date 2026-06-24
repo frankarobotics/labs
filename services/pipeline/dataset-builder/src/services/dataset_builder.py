@@ -15,10 +15,10 @@ class UnsupportedDatasetFormatError(ValueError):
 
 
 @dataclass(frozen=True)
-class SingleDatasetBuildRequest:
-    """Input required to build a dataset from a single MCAP file."""
+class DatasetBuildRequest:
+    """Input required to build a dataset from one or more MCAP files."""
 
-    input_path: Path
+    mcap_files: tuple[Path, ...]
     output_dir: Path
     target_format: str
     target_fps: float
@@ -30,7 +30,7 @@ class SingleDatasetBuildRequest:
 
 def _load_lerobot_builder() -> DatasetBuilder:
     module = import_module("lerobot_conversion.lerobot_converter")
-    builder: DatasetBuilder = module.convert_mcap_to_lerobot
+    builder: DatasetBuilder = module.convert_mcaps_to_lerobot
     return builder
 
 
@@ -44,8 +44,8 @@ def list_supported_formats() -> tuple[str, ...]:
     return tuple(sorted(BUILDERS.keys()))
 
 
-def build_single_dataset(request: SingleDatasetBuildRequest) -> dict[str, Any]:
-    """Build a dataset from a single MCAP file."""
+def build_dataset(request: DatasetBuildRequest) -> dict[str, Any]:
+    """Build a dataset from one or more MCAP files."""
     builder_loader = BUILDERS.get(request.target_format)
     if builder_loader is None:
         supported_formats = ", ".join(list_supported_formats())
@@ -56,7 +56,7 @@ def build_single_dataset(request: SingleDatasetBuildRequest) -> dict[str, Any]:
     builder = builder_loader()
 
     return builder(
-        mcap_file=request.input_path,
+        mcap_files=request.mcap_files,
         output_dir=request.output_dir,
         target_fps=request.target_fps,
         dataset_name=request.dataset_name,

@@ -33,6 +33,10 @@
 - **Episode list UI**: increased limit to 1000 episodes, show episode count, display full UUID instead of truncated suffix.
 - **Fixed a bug**: the episode duration/length in the episode list of the UI was incorrect.
 - **Architecture diagrams**: renamed `labs-architecture.dsl/json` → `workspace.dsl/json`; fixed workflow state machine transitions; added README with instructions for Structurizr Local.
+- Expanded dataset-builder service to create datasets from multiple episodes based on filters such as date range, task description, and more.
+  The service supports dry-run mode for previewing matched episodes without conversion.
+- Increased GOP (Group of Pictures) size to 30 to improve compression efficiency and reduce processing time.
+  The exported datasets remain having a GOP size of 2 for compatibility with LeRobot format.
 
 ## [0.1.1] - 2026-06-01
 

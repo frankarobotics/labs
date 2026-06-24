@@ -23,7 +23,7 @@ class DataProcessorConfig(BaseModel):
 
     # AV1 encoding settings (libsvtav1)
     av1_preset: int = 8  # 0-12, lower=slower/better (8=balanced)
-    av1_gop_size: int = 2  # Keyframe frequency (2=LeRobot standard)
+    av1_gop_size: int = 30  # Keyframe every ~1s @30fps. Dataset-builder re-encodes with its own GOP.
     av1_pixel_format: str = "yuv420p"  # Color format
     av1_threads: int = 0  # 0=auto-detect (quarter of available CPU cores)
     av1_nice: int = 19  # Process priority (0-19, 19=lowest)
