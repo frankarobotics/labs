@@ -23,3 +23,7 @@ ros_topics:
   - '/wrist_camera_left/camera/color/image_raw'
   - '/wrist_camera_right/camera/color/image_raw'
   - '/head_camera/zed_node/rgb/image_rect_color'
+  # Camera info from cameras (REALSENSE_CAMERA & ZED_CAMERA)
+  - '/wrist_camera_left/camera/color/camera_info'
+  - '/wrist_camera_right/camera/color/camera_info'
+  - '/head_camera/zed_node/rgb/camera_info'

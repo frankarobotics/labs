@@ -37,6 +37,7 @@
   The service supports dry-run mode for previewing matched episodes without conversion.
 - Increased GOP (Group of Pictures) size to 30 to improve compression efficiency and reduce processing time.
   The exported datasets remain having a GOP size of 2 for compatibility with LeRobot format.
+- Added `camera_info` topics to the data recorder configuration for all deployments to capture camera calibration data.
 
 ## [0.1.1] - 2026-06-01
 
