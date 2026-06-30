@@ -1,11 +1,11 @@
 ####################################################################################################
 # Stage: base
-FROM ros:humble-ros-base AS base
+FROM ros:jazzy-ros-base AS base
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    ros-humble-rmw-cyclonedds-cpp \
-    ros-humble-cyclonedds \
+    ros-jazzy-rmw-cyclonedds-cpp \
+    ros-jazzy-cyclonedds \
     python3-rosdep \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
@@ -26,7 +26,7 @@ RUN apt-get update && \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-ENV PYTHONPATH="/opt/ros/humble/lib/python3.10/site-packages:${PYTHONPATH}:/workspace/src"
+ENV PYTHONPATH="/opt/ros/jazzy/lib/python3.12/site-packages:${PYTHONPATH}:/workspace/src"
 
 SHELL ["/bin/bash", "-c"]
 COPY src/controller_coordinator/package.xml src/controller_coordinator/package.xml
@@ -40,7 +40,7 @@ RUN apt-get update && \
 COPY src src
 
 RUN cd /workspace/src && \
-    source /opt/ros/humble/setup.bash && \
+    source /opt/ros/jazzy/setup.bash && \
     colcon build --packages-select controller_coordinator
 
 COPY entrypoint.sh entrypoint.sh
@@ -67,7 +67,7 @@ CMD ["./entrypoint.sh"]
 # Stage: prod
 FROM base AS prod
 
-ENV PYTHONPATH="/opt/ros/humble/lib/python3.10/site-packages:${PYTHONPATH}:/workspace/src"
+ENV PYTHONPATH="/opt/ros/jazzy/lib/python3.12/site-packages:${PYTHONPATH}:/workspace/src"
 
 SHELL ["/bin/bash", "-c"]
 COPY src src
@@ -78,7 +78,7 @@ RUN apt-get update && \
     rosdep install --from-paths src --ignore-src -r -y && \
     rm -rf /var/lib/apt/lists/* && \
     cd /workspace/src && \
-    source /opt/ros/humble/setup.bash && \
+    source /opt/ros/jazzy/setup.bash && \
     colcon build --packages-select controller_coordinator
 
 COPY entrypoint.sh entrypoint.sh

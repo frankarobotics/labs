@@ -26,8 +26,8 @@ For a detailed architecture diagram, see the [Architecture Diagram](docs/labs-ar
 
 - Local orchestration/dev workflow: Docker Compose, Tilt, and `go-task` Taskfiles
 - FastAPI + Uvicorn ASGI server with async/await
-- Python (service-dependent: 3.10+ and 3.12+) with `uv` package manager
-- ROS 2 (primarily Jazzy, also Humble)
+- Python 3.12+ with `uv` package manager
+- ROS 2 Jazzy
 - Recording/export via `ros2 bag` in MCAP format
 - Dataset export format: LeRobot v2.1
 - Media processing: FFmpeg-based video encoding and Foxglove-compatible artifacts
@@ -101,7 +101,7 @@ This project uses two key tools to simplify development and deployment:
 
 - Docker Engine and Docker Compose
 - NVIDIA drivers + nvidia-docker runtime (for GPU-accelerated services such as the ZED driver). See the [Zed Camera README](services/sensors/zed-camera/README.md) for GPU setup.
-- ROS 2 Jazzy (or Humble, depending on the service) dependencies installed on the host if you plan to run nodes outside the containers.
+- ROS 2 Jazzy dependencies installed on the host if you plan to run nodes outside the containers.
 
 ### Setup
 

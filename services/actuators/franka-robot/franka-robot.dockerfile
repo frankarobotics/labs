@@ -2,7 +2,7 @@
 # Stage: deps
 ARG UV_VERSION=0.8.22
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} as uv
-FROM ros:humble-ros-base AS deps
+FROM ros:jazzy-ros-base AS deps
 
 COPY --from=uv /uv /usr/local/bin/uv
 
@@ -13,8 +13,8 @@ ENV PYTHONUNBUFFERED=1
 # https://www.stereolabs.com/docs/ros2/150_dds_and_network_tuning
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    ros-humble-rmw-cyclonedds-cpp \
-    ros-humble-cyclonedds \
+    ros-jazzy-rmw-cyclonedds-cpp \
+    ros-jazzy-cyclonedds \
     python3-rosdep \
     git \
     python3-vcstool \
@@ -24,15 +24,15 @@ RUN apt-get update \
 
 WORKDIR /workspace
 
-ENV PYTHONPATH="/opt/ros/humble/lib/python3.10/site-packages:${PYTHONPATH}:/workspace/src"
+ENV PYTHONPATH="/opt/ros/jazzy/lib/python3.12/site-packages:${PYTHONPATH}:/workspace/src"
 
 SHELL ["/bin/bash", "-c"]
 
 # Clone and build franka_ros2 and its dependencies 
 RUN mkdir -p /workspace/src/third_party && \
     cd /workspace/src/third_party && \
-    git clone https://github.com/frankaemika/franka_ros2.git -b v2.1.0 && \
-    vcs import < franka_ros2/franka.repos && \
+    git clone https://github.com/frankaemika/franka_ros2.git -b v3.4.0 && \
+    vcs import < franka_ros2/dependency.repos && \
     find . -name ".git" -type d -execdir git submodule update --init --recursive \;
 
 # Install dependencies and build third-party packages 
@@ -40,7 +40,7 @@ RUN apt-get update && \
     rosdep update && \
     rosdep install --from-paths /workspace/src/third_party --ignore-src -r -y && \
     rm -rf /var/lib/apt/lists/* && \
-    source /opt/ros/humble/setup.bash && \
+    source /opt/ros/jazzy/setup.bash && \
     cd /workspace/src && \
     colcon build --symlink-install --packages-skip franka_follower_controllers --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
 
@@ -60,7 +60,7 @@ RUN apt-get update && \
 
 COPY src/third_party/franka_follower_controllers /workspace/src/third_party/franka_follower_controllers
 
-RUN source /opt/ros/humble/setup.bash && \
+RUN source /opt/ros/jazzy/setup.bash && \
     source /workspace/src/install/setup.bash && \
     cd /workspace/src && \
     colcon build --symlink-install --packages-select franka_follower_controllers --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
@@ -91,7 +91,7 @@ FROM deps AS prod
 
 COPY src/third_party/franka_follower_controllers /workspace/src/third_party/franka_follower_controllers
 
-RUN source /opt/ros/humble/setup.bash && \
+RUN source /opt/ros/jazzy/setup.bash && \
     source /workspace/src/install/setup.bash && \
     cd /workspace/src && \
     colcon build --packages-select franka_follower_controllers --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF

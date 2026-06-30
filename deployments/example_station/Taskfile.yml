@@ -22,7 +22,6 @@ tasks:
     cmds:
       - |
         docker pull node:22 || true &
-        docker pull ros:humble-ros-base || true &
         docker pull ros:jazzy-ros-base || true &
         docker pull stereolabs/zed:5.0-devel-cuda12.8-ubuntu24.04 || true &
         wait

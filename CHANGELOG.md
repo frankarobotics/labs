@@ -41,12 +41,15 @@
   The exported datasets remain having a GOP size of 2 for compatibility with LeRobot format.
 - Added `camera_info` topics to the data recorder configuration for all deployments to capture camera calibration data.
 - Introduced an `AUTORECOVERY` state in the controller coordinator and the workflow state machine.
-  When a controller dies during `READY`/`SYNCING`/`FOLLOWING`, the coordinator attempts to re-activate
+  When a controller dies during `READY`/`SYNCING`/`FOLLOWING`, the coordinator attempts to re-activate the hardware interface and
   the ready controller and returns to `READY`, falling back to `IDLE` on failure. The workflow mirrors
   this across all coordinators. A toast notification is shown in the UI while recovery is in progress.
 - Recording can now only be started while the workflow is in `FOLLOWING`, and any active recording is
   automatically stopped (moved to review) when the workflow leaves `FOLLOWING`.
 - Reduced device status poll interval to 0.5s, so the system status UI reflects device changes faster.
+- All Docker containers were upgraded to use `ROS 2 Jazzy` (no longer a mix of `ROS 2 Humble` and `ROS 2 Jazzy`)
+- The version of the `robotiq`, `realsense`, `franka_follower_controllers` packages were updated to their newest respective versions
+- **Breaking Change:** An update to `franka_follower_controllers` requires the renaming of `arm_id` to `robot_type` in the `config_franka_robot.yml` configuration file of every deployment.
 
 ## [0.1.1] - 2026-06-01
 

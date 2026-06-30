@@ -1,7 +1,7 @@
 LEFT:
   namespace: "left"
   robot_ip: "xxx.xxx.xxx.xxx"
-  arm_id: "fr3"
+  robot_type: "fr3"
   mock_hardware: false
   load_gripper: false
 
@@ -79,7 +79,7 @@ LEFT:
 RIGHT:
   namespace: "right"
   robot_ip: "xxx.xxx.xxx.xxx"
-  arm_id: "fr3"
+  robot_type: "fr3"
   mock_hardware: false
   load_gripper: false
 
