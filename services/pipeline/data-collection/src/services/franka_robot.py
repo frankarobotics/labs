@@ -56,6 +56,9 @@ class FrankaRobotService(BaseRobotService):
                         Trigger, f"{prefix}/controller_coordinator/start_operating"
                     ),
                     "stop": self.node.create_client(Trigger, f"{prefix}/controller_coordinator/stop"),
+                    "start_autorecovery": self.node.create_client(
+                        Trigger, f"{prefix}/controller_coordinator/start_autorecovery"
+                    ),
                 }
 
                 self.controller_coordinator_states[namespace] = "UNKNOWN"

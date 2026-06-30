@@ -1,3 +1,5 @@
+import { LoaderCircle } from 'lucide-react'
+import { useEffect } from 'react'
 import { data } from 'react-router'
 
 import usePollLoader from '@/api/polling/usePollLoader'
@@ -6,6 +8,7 @@ import RecordEpisode from '@/components/RecordEpisode'
 import SystemStatus from '@/components/SystemStatus'
 import Task from '@/components/Task'
 import TeleoperationActions from '@/components/TeleoperationActions'
+import { useToast } from '@/components/Toasts'
 import { WebsocketCanvas } from '@/components/WebsocketCanvas/WebsocketCanvas'
 import { CookieScope } from '@/sessions/CookieScope'
 import { getTask, verifyTask } from '@/sessions/task'
@@ -112,6 +115,21 @@ export default function Home({
   loaderData: { workflowState, recordingState, duration, cameras, robots, teleop, tasks, activeTask },
 }: Route.ComponentProps) {
   usePollLoader()
+  const toast = useToast()
+
+  useEffect(() => {
+    if (workflowState === 'AUTORECOVERY') {
+      toast.show(
+        <div className='flex flex-row items-center gap-3'>
+          <LoaderCircle className='h-5 w-5 shrink-0 animate-spin' />
+          <span>Attempting auto-recovery after controller error. Please wait...</span>
+        </div>,
+        { duration: Infinity, important: true, variant: 'error' },
+      )
+    } else {
+      toast.hide()
+    }
+  }, [workflowState, toast])
 
   return (
     <main className='screen:gap-5 screen:p-5 flex h-full min-h-0 w-full flex-col gap-3 p-3'>

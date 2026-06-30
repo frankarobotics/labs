@@ -33,12 +33,18 @@ class BaseWorkflowStateMachine(StateMachine):
     ready = State("READY")
     syncing = State("SYNCING")
     following = State("FOLLOWING")
+    autorecovery = State("AUTORECOVERY")
 
     # Events
-    get_ready = Event(idle.to(ready) | following.to(ready) | syncing.to(ready) | ready.to.itself())
+    get_ready = Event(
+        idle.to(ready) | following.to(ready) | syncing.to(ready) | autorecovery.to(ready) | ready.to.itself()
+    )
     start_syncing = Event(ready.to(syncing) | syncing.to.itself())
     start_following = Event(syncing.to(following) | following.to.itself())
-    get_idle = Event(ready.to(idle) | syncing.to(idle) | following.to(idle) | idle.to.itself())
+    start_autorecovery = Event(
+        following.to(autorecovery) | syncing.to(autorecovery) | ready.to(autorecovery) | autorecovery.to.itself()
+    )
+    get_idle = Event(ready.to(idle) | syncing.to(idle) | following.to(idle) | autorecovery.to(idle) | idle.to.itself())
 
     def before_get_ready(self) -> None:
         """Prepare the system to transition to READY state."""

@@ -25,6 +25,7 @@ from services.task import TaskService
 from services.teleop import TeleopService
 from state_machine.franka_workflow import FrankaWorkflowStateMachine
 from state_machine.recording import RecordingStateMachine
+from state_machine.recording_autostop import RecordingAutoStopListener
 
 # Global singleton instances
 _device_repo_instance: DeviceRepo | None = None
@@ -144,7 +145,9 @@ def get_recording_state_machine(
     global _recording_state_machine_instance  # noqa: PLW0603
     if _recording_state_machine_instance is None:
         _recording_state_machine_instance = RecordingStateMachine(episode_service, data_recorder_repo)
-        logger.info("Initialized RecordingStateMachine")
+        workflow_state_machine = get_workflow_state_machine()
+        workflow_state_machine.add_listener(RecordingAutoStopListener(_recording_state_machine_instance))
+        logger.info("Initialized RecordingStateMachine and registered recording auto-stop listener")
     return _recording_state_machine_instance
 
 
@@ -152,12 +155,14 @@ def get_recording_service(
     state_machine: RecordingStateMachine = Depends(get_recording_state_machine),
     data_recorder_repo: DataRecorderRepo = Depends(get_data_recorder_repo),
     teleop_service: TeleopService = Depends(get_teleop_service),
+    workflow_state_machine: FrankaWorkflowStateMachine = Depends(get_workflow_state_machine),
 ) -> RecordingService:
     """Get the recording service instance."""
     return RecordingService(
         state_machine,
         data_recorder_repo,
         teleop_service,
+        workflow_state_machine,
     )
 
 

@@ -20,6 +20,7 @@ from models.recording import (
 from repos.data_recorder import DataRecorderRepo
 from services.teleop import TeleopService
 from state_machine.recording import RecordingStateMachine
+from state_machine.workflow import BaseWorkflowStateMachine
 
 
 class RecordingService:
@@ -30,6 +31,7 @@ class RecordingService:
         state_machine: RecordingStateMachine,
         data_recorder_repo: DataRecorderRepo,
         teleop_service: TeleopService,
+        workflow_state_machine: BaseWorkflowStateMachine,
     ) -> None:
         """Initialize the episode service.
 
@@ -37,14 +39,25 @@ class RecordingService:
             state_machine: State machine instance for managing collection states.
             data_recorder_repo: Repository for communicating with the data recorder service.
             teleop_service: Service for teleoperation forwarding and control.
+            workflow_state_machine: Workflow state machine, used to gate recording on FOLLOWING.
         """
         self.state_machine: RecordingStateMachine = state_machine
         self.data_recorder_repo: DataRecorderRepo = data_recorder_repo
         self.teleop_service: TeleopService = teleop_service
+        self.workflow_state_machine: BaseWorkflowStateMachine = workflow_state_machine
 
     def start_recording(self, task_id: UUID) -> StartRecordingResponse:
         """Start recording an episode."""
         episode_id: UUID = uuid7.create()
+
+        if self.workflow_state_machine.current_state != self.workflow_state_machine.following:
+            message = (
+                f"Cannot start recording while workflow is in "
+                f"{self.workflow_state_machine.current_state.id!r}; must be in 'following'"
+            )
+            logger.warning(message)
+            return StartRecordingResponse(episode_id=episode_id, status="error", message=message)
+
         logger.info(f"Starting recording episode {episode_id} for task {task_id}")
 
         try:

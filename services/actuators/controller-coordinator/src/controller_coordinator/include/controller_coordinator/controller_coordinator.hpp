@@ -33,8 +33,9 @@ namespace controller_coordinator {
  * Ready: Ready-state controller active and running
  * Syncing: Operating controller active, syncing robot state to target joint states
  * Following: Operating controller active, following target joint states
+ * Autorecovery: A controller died; attempting to restore the READY state
  */
-enum class CoordinatorState { IDLE, READY, SYNCING, FOLLOWING };
+enum class CoordinatorState { IDLE, READY, SYNCING, FOLLOWING, AUTORECOVERY };
 
 /**
  * @brief Convert CoordinatorState enum to string
@@ -54,9 +55,10 @@ std::string to_string(CoordinatorState state);
  * - Idle -> Ready: Via "get_ready" service call
  * - Ready -> Syncing: Via "start_operating" service call
  * - Syncing -> Following: Automatic when operating controller reports sync complete
- * - Ready -> Idle: Automatic when ready controller dies
- * - Syncing -> Ready: Automatic when operating controller dies
- * - Following -> Ready: Automatic when operating controller dies
+ * - Ready -> Autorecovery -> Ready: Automatic when ready controller dies (one attempt)
+ * - Ready -> Autorecovery -> Idle: Automatic when ready controller dies and recovery fails
+ * - Syncing/Following -> Autorecovery -> Ready: Automatic when operating controller dies
+ * - Syncing/Following -> Autorecovery -> Idle: Automatic when operating controller dies and recovery fails
  * - Following -> Idle: Via "stop" service call
  * - Syncing -> Idle: Via "stop" service call
  * - Ready -> Idle: Via "stop" service call
@@ -68,6 +70,21 @@ std::string to_string(CoordinatorState state);
  */
 class FrankaControllerCoordinator : public rclcpp::Node {
  public:
+  // --- ROS parameter defaults ---
+  // Used as the default value when declaring ROS parameters and as fallback initialisers.
+  static constexpr std::chrono::milliseconds kDefaultServiceTimeout{5000};
+  static constexpr std::chrono::milliseconds kDefaultAutorecoveryTimeout{30000};
+
+  // --- Fixed timeouts (not ROS-configurable) ---
+  // Single list_controllers call timeout when polling for a controller to appear.
+  static constexpr std::chrono::milliseconds kControllerLoadPerCallTimeout{500};
+  // Sleep interval between retries in wait_for_controller_loaded.
+  static constexpr std::chrono::milliseconds kControllerLoadPollInterval{200};
+  // Single-call timeout used to probe whether the controller manager is reachable.
+  static constexpr std::chrono::milliseconds kControllerManagerProbeTimeout{200};
+  // Hardware-level timeout forwarded to the switch_controller service request.
+  static constexpr std::chrono::milliseconds kSwitchControllerHardwareTimeout{5000};
+
   explicit FrankaControllerCoordinator(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
   virtual ~FrankaControllerCoordinator();
   CoordinatorState get_state() const;
@@ -82,20 +99,26 @@ class FrankaControllerCoordinator : public rclcpp::Node {
   void handle_stop(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
                    std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
+  void handle_start_autorecovery(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+                          std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+
   bool transition_to_ready();
   bool transition_to_syncing();
   void transition_to_following();
   bool transition_to_idle();
-  bool transition_following_to_ready();
+  bool transition_autorecovery_to_ready();
+  void monitor_autorecovery_cycle();
 
   bool switch_controllers(const std::vector<std::string>& activate_controllers,
                           const std::vector<std::string>& deactivate_controllers,
                           bool strict = true);
   std::optional<bool> is_controller_active(const std::string& controller_name);
-  bool is_controller_loaded(const std::string& controller_name);
-  bool wait_for_controller_loaded(const std::string& controller_name);
+  bool is_controller_loaded(const std::string& controller_name,
+                             std::chrono::milliseconds timeout = kControllerLoadPerCallTimeout);
+  bool wait_for_controller_loaded(const std::string& controller_name,
+                                   std::chrono::milliseconds total_timeout = kDefaultServiceTimeout);
   bool is_controller_manager_available(
-      std::chrono::milliseconds probe_timeout = std::chrono::milliseconds(200));
+      std::chrono::milliseconds probe_timeout = kControllerManagerProbeTimeout);
   void monitor_operating_controller();
   void on_controller_state_received(const std_msgs::msg::String& msg);
 
@@ -118,11 +141,14 @@ class FrankaControllerCoordinator : public rclcpp::Node {
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr get_ready_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_operating_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_service_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr autorecover_service_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr state_publisher_;
   rclcpp::TimerBase::SharedPtr controller_monitor_timer_;
   rclcpp::TimerBase::SharedPtr state_publish_timer_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr controller_state_subscriber_;
   std::string last_controller_state_;
+  std::optional<std::chrono::steady_clock::time_point> autorecovery_started_;
+  std::chrono::milliseconds autorecovery_timeout_{kDefaultAutorecoveryTimeout};
   rclcpp::CallbackGroup::SharedPtr client_callback_group_;
   rclcpp::CallbackGroup::SharedPtr service_callback_group_;
   mutable std::mutex state_mutex_;

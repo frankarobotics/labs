@@ -107,6 +107,34 @@ const SYNCING_BUTTONS = {
   },
 } as const satisfies ButtonSet
 
+const AUTORECOVERY_BUTTONS = {
+  left: {
+    label: 'Stop teleoperation',
+    Icon: Unlink2,
+    type: 'negative',
+    disabled: false,
+    options: {
+      action: '/api/teleop',
+      method: 'post',
+    },
+    payload: {
+      operation: 'stop',
+    },
+  },
+  middle: {
+    label: 'Sync robots',
+    Icon: RefreshCw,
+    type: 'default',
+    disabled: true,
+  },
+  right: {
+    label: 'Start recording',
+    Icon: Focus,
+    type: 'primary',
+    disabled: true,
+  },
+} as const satisfies ButtonSet
+
 const FOLLOWING_BUTTONS = {
   left: {
     label: 'Stop teleoperation',
@@ -211,6 +239,7 @@ const REVIEWING_BUTTONS = {
 export function getButtonActions(workflowState: string, recordingState: string): ButtonSet {
   if (recordingState === 'RECORDING') return RECORDING_BUTTONS
   if (recordingState === 'REVIEWING') return REVIEWING_BUTTONS
+  if (workflowState === 'AUTORECOVERY') return AUTORECOVERY_BUTTONS
   if (workflowState === 'FOLLOWING') return FOLLOWING_BUTTONS
   if (workflowState === 'SYNCING') return SYNCING_BUTTONS
   if (workflowState === 'READY') return READY_BUTTONS

@@ -8,7 +8,7 @@ The service exposes a FastAPI control plane that keeps human-operated teleop ses
 
 ### Runtime Responsibilities
 
-1. **Lifecycle orchestration**: `RecordingStateMachine` manages the IDLE → RECORDING → REVIEWING flow, while `FrankaWorkflowStateMachine` manages the IDLE → READY → SYNCING → FOLLOWING teleoperation flow. Both guard transitions made through the REST API.
+1. **Lifecycle orchestration**: `RecordingStateMachine` manages the IDLE → RECORDING → REVIEWING flow, while `FrankaWorkflowStateMachine` manages the IDLE → READY → SYNCING → FOLLOWING teleoperation flow (plus an `AUTORECOVERY` state entered when a controller dies). Both guard transitions made through the REST API. Recording can only start while the workflow is in FOLLOWING, and an active recording is auto-stopped (moved to review) when the workflow leaves FOLLOWING.
 2. **Episode management**: `EpisodeService` talks to the metadata repo and the Data Recorder HTTP API to create, stop, save, discard, and label episodes.
 3. **Device health tracking**: `DeviceMonitor` mirrors the station configuration into the in-memory device store and continuously inspects ROS topics to mark devices ONLINE/OFFLINE/UNKNOWN.
 4. **Operator and task APIs**: Task, device, teleop, operator, and camera handlers expose read endpoints for the web UI and other services. Tasks are loaded from YAML configuration files.
@@ -17,7 +17,7 @@ The service exposes a FastAPI control plane that keeps human-operated teleop ses
 ### Architecture
 
 - **FastAPI application** (`src/main.py`): Creates the app with a lifespan hook that initializes rclpy, launches the `DeviceMonitor`, wires CORS, and mounts routers from `handlers/`.
-- **State machines** (`src/state_machine/`): `RecordingStateMachine` manages episode recording lifecycle; `FrankaWorkflowStateMachine` (extending `BaseWorkflowStateMachine`) manages the teleoperation workflow. Both are backed by `python-statemachine` and log every transition.
+- **State machines** (`src/state_machine/`): `RecordingStateMachine` manages episode recording lifecycle; `FrankaWorkflowStateMachine` (extending `BaseWorkflowStateMachine`) manages the teleoperation workflow, including an `AUTORECOVERY` state that mirrors controller-coordinator recovery. Both are backed by `python-statemachine` and log every transition. `RecordingAutoStopListener` (`recording_autostop.py`) bridges the two one-way: it listens to the workflow leaving FOLLOWING and stops any active recording off-thread, keeping the workflow non-blocking.
 - **Device monitor daemon** (`src/services/device_monitor.py`): Background thread that mirrors configured teleop robots and observer devices into the DB, polls ROS topics, and reinitializes its node when contexts become invalid instead of crashing.
 - **Service layer** (`src/services/`): `EpisodeService`, `TaskService`, `DeviceService`, and peers combine repositories, the state machine, and Data Recorder RPCs to implement business logic.
 - **Repositories** (`src/repos/`): Typed adapters for HTTP clients such as `DataRecorderRepo`.

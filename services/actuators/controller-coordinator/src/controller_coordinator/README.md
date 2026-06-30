@@ -1,6 +1,6 @@
 # Controller Coordinator
 
-ROS2 node that manages robot arm controller state transitions between Idle, Ready, Syncing, and Following modes.
+ROS2 node that manages robot arm controller state transitions between Idle, Ready, Syncing, Following, and Autorecovery modes.
 
 ## States
 
@@ -8,8 +8,11 @@ ROS2 node that manages robot arm controller state transitions between Idle, Read
 - **Ready**: Ready-state controller active (prepares the robot for the next step in the pipeline by activating a controller such as gravity compensation for manual positioning or a move-to-position controller to reach a specific configuration before proceeding to data collection, inference, etc.)
 - **Syncing**: Operating controller active, moving to start position
 - **Following**: Operating controller active, following target joint states
+- **Autorecovery**: A controller died unexpectedly; the coordinator attempts to re-activate the ready controller, transitioning to **Ready** on success or **Idle** on failure
 
 The transition from Syncing to Following happens automatically when the operating controller reports that syncing is complete (via its `~/state` topic).
+
+Autorecovery is entered automatically when a controller dies in `Ready`, `Syncing`, or `Following`. It can also be requested externally via the `start_autorecovery` service.
 
 ## Launch
 
@@ -20,11 +23,14 @@ ros2 launch controller_coordinator controller_coordinator.launch.py config_file:
 ## Usage
 
 ```bash
-# Transition to Ready
+# Transition to Ready (also accepted from Syncing/Following/Autorecovery)
 ros2 service call /<namespace>/controller_coordinator/get_ready std_srvs/srv/Trigger
 
 # Transition to Operating (Following or SyncingFollowing)
 ros2 service call /<namespace>/controller_coordinator/start_operating std_srvs/srv/Trigger
+
+# Trigger autorecovery (re-activate the ready controller)
+ros2 service call /<namespace>/controller_coordinator/start_autorecovery std_srvs/srv/Trigger
 
 # Transition to Idle
 ros2 service call /<namespace>/controller_coordinator/stop std_srvs/srv/Trigger

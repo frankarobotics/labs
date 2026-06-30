@@ -19,6 +19,7 @@ function getAlert(workflowState: string, recordingState: string): string | null 
   if (workflowState === 'SYNCING') return 'Syncing in progress. Please wait...'
   if (workflowState === 'READY') return 'Sync the robots to start recording.'
   if (workflowState === 'FOLLOWING') return 'Ready to record.'
+  if (workflowState === 'AUTORECOVERY') return 'Attempting auto-recovery after controller error. Please wait...'
   return null
 }
 

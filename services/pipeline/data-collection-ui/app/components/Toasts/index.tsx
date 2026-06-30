@@ -13,6 +13,7 @@ import React, {
 export type ToastOptions = {
   duration?: number // ms; Infinity to pin
   important?: boolean // forces assertive announcement
+  variant?: 'default' | 'error'
 }
 
 type ToastAPI = {
@@ -37,6 +38,7 @@ export function ToastProvider({ children, defaultDuration = 10000, className }: 
   const popRef = useRef<HTMLDivElement | null>(null)
   const [content, setContent] = useState<React.ReactNode>(null)
   const [important, setImportant] = useState(false)
+  const [variant, setVariant] = useState<ToastOptions['variant']>('default')
 
   // auto-dismiss bookkeeping
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -61,6 +63,7 @@ export function ToastProvider({ children, defaultDuration = 10000, className }: 
     (message: React.ReactNode, opts?: ToastOptions) => {
       setContent(message)
       setImportant(!!opts?.important)
+      setVariant(opts?.variant ?? 'default')
       remainingRef.current = opts?.duration ?? defaultDuration
 
       const el = popRef.current
@@ -145,7 +148,7 @@ export function ToastProvider({ children, defaultDuration = 10000, className }: 
           // transitions (+ overlay/display discrete transitions in supporting engines)
           'transition-all duration-500 ease-out',
           'motion-reduce:transition-none',
-          'bg-pastel-grey-200',
+          variant === 'error' ? 'bg-negative-200 text-negative-600' : 'bg-pastel-grey-200',
           className,
         )}
       >
