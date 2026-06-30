@@ -12,8 +12,8 @@ echo "echo ROS_DOMAIN_ID: \$ROS_DOMAIN_ID" >>~/.bashrc
 echo "echo RMW_IMPLEMENTATION: \$RMW_IMPLEMENTATION" >>~/.bashrc
 echo "echo CYCLONEDDS_URI: \$CYCLONEDDS_URI" >>~/.bashrc
 
-source /opt/ros/humble/setup.bash
-echo "source /opt/ros/humble/setup.bash" >>~/.bashrc
+source /opt/ros/jazzy/setup.bash
+echo "source /opt/ros/jazzy/setup.bash" >>~/.bashrc
 
 source src/third_party/gello_software/ros2/install/setup.bash
 echo "source src/third_party/gello_software/ros2/install/setup.bash" >>~/.bashrc

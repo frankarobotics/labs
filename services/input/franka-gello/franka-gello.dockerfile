@@ -2,7 +2,7 @@
 # Stage: deps
 ARG UV_VERSION=0.8.22
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} as uv
-FROM ros:humble-ros-base AS deps
+FROM ros:jazzy-ros-base AS deps
 
 COPY --from=uv /uv /usr/local/bin/uv
 
@@ -13,8 +13,8 @@ ENV PYTHONUNBUFFERED=1
 # https://www.stereolabs.com/docs/ros2/150_dds_and_network_tuning
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    ros-humble-rmw-cyclonedds-cpp \
-    ros-humble-cv-bridge \
+    ros-jazzy-rmw-cyclonedds-cpp \
+    ros-jazzy-cv-bridge \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -29,9 +29,9 @@ RUN apt-get update && apt-get install -y \
   libeigen3-dev \
   libfmt-dev \
   libpoco-dev \
-  ros-humble-pinocchio \
+  ros-jazzy-pinocchio \
   # Install ros packages
-  ros-humble-rqt-common-plugins \
+  ros-jazzy-rqt-common-plugins \
   python3-colcon-common-extensions \
   python3-colcon-mixin \
   python3-pip \
@@ -49,24 +49,24 @@ RUN apt-get update \
 
 WORKDIR /workspace
 
-ENV PYTHONPATH="/opt/ros/humble/lib/python3.10/site-packages:${PYTHONPATH}:/workspace/src"
+ENV PYTHONPATH="/opt/ros/jazzy/lib/python3.12/site-packages:${PYTHONPATH}:/workspace/src"
 
 # Copy the necessary files
 COPY pyproject.toml pyproject.toml
-COPY uv.lock uv.lock
+#COPY uv.lock uv.lock
 
 # Install the project's dependencies using the lockfile and settings in the system python
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv export -o requirements.txt && \
-    uv pip sync requirements.txt --system
+    uv pip sync requirements.txt --system --break-system-packages
 
 # Build franka_gello_state_publisher
 SHELL ["/bin/bash", "-c"]
 COPY src/third_party src/third_party
 RUN cd /workspace/src/third_party/gello_software/ros2 && \
-    source /opt/ros/humble/setup.bash && \
+    source /opt/ros/jazzy/setup.bash && \
     colcon build --packages-select franka_gello_state_publisher
 
 COPY src src
@@ -104,7 +104,7 @@ RUN apt-get update \
 
 WORKDIR /workspace
 
-ENV PYTHONPATH="/opt/ros/humble/lib/python3.10/site-packages:${PYTHONPATH}:/workspace/src"
+ENV PYTHONPATH="/opt/ros/jazzy/lib/python3.12/site-packages:${PYTHONPATH}:/workspace/src"
 
 # Enable bytecode compilation
 ENV UV_COMPILE_BYTECODE=1
@@ -127,7 +127,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 SHELL ["/bin/bash", "-c"]
 COPY src/third_party src/third_party
 RUN cd /workspace/src/third_party/gello_software/ros2 && \
-    source /opt/ros/humble/setup.bash && \
+    source /opt/ros/jazzy/setup.bash && \
     colcon build --packages-select franka_gello_state_publisher
 
 COPY src src

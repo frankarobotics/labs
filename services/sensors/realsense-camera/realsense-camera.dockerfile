@@ -2,7 +2,7 @@
 # Stage: deps
 ARG UV_VERSION=0.8.22
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} as uv
-FROM ros:humble-ros-base AS deps
+FROM ros:jazzy-ros-base AS deps
 
 COPY --from=uv /uv /usr/local/bin/uv
 
@@ -10,11 +10,11 @@ RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     clang-14 \
     python3-pip \
-    ros-humble-ament-cmake \
+    ros-jazzy-ament-cmake \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-ENV PYTHONPATH="/opt/ros/humble/lib/python3.10/site-packages:${PYTHONPATH}"
+ENV PYTHONPATH="/opt/ros/jazzy/lib/python3.12/site-packages:${PYTHONPATH}"
 
 # Set Python environment variable to flush logs
 ENV PYTHONUNBUFFERED=1
@@ -39,9 +39,9 @@ RUN apt-get update \
 
 # librealsense: This is the version that is being used in the official librealsense/librealsense docker image
 # https://hub.docker.com/r/librealsense/librealsense/tags
-ENV LIBRS_VERSION=2.44.0
+ENV LIBRS_VERSION=2.58.2
 RUN cd /usr/src \
-    && curl https://codeload.github.com/IntelRealSense/librealsense/tar.gz/refs/tags/v$LIBRS_VERSION -o /usr/src/librealsense.tar.gz \
+    && curl "https://codeload.github.com/realsenseai/librealsense/tar.gz/refs/tags/v${LIBRS_VERSION}" -o /usr/src/librealsense.tar.gz \
     && tar -zxf /usr/src/librealsense.tar.gz \
     && rm /usr/src/librealsense.tar.gz
 RUN ln -s /usr/src/librealsense-${LIBRS_VERSION} /usr/src/librealsense
@@ -54,7 +54,8 @@ RUN cd /usr/src/librealsense \
     -DCMAKE_CXX_FLAGS_RELEASE="${CMAKE_CXX_FLAGS_RELEASE} -s" \
     -DCMAKE_INSTALL_PREFIX=/opt/librealsense \
     -DBUILD_GRAPHICAL_EXAMPLES=OFF \
-    -DBUILD_PYTHON_BINDINGS:bool=true \
+    -DBUILD_EXAMPLES=OFF \
+    -DBUILD_PYTHON_BINDINGS=OFF \
     -DCMAKE_BUILD_TYPE=Release ../ \
     && make -j$(($(nproc)-1)) all \
     && make install
@@ -80,12 +81,12 @@ RUN apt-get update \
 # librealsense: Install librealsense ros package
 RUN sudo apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    ros-humble-realsense2-* \
-    ros-humble-image-transport \
-    ros-humble-image-transport-plugins \
-    ros-humble-compressed-image-transport \
-    ros-humble-image-proc \
-    ros-humble-rosbag2 \
+    ros-jazzy-realsense2-* \
+    ros-jazzy-image-transport \
+    ros-jazzy-image-transport-plugins \
+    ros-jazzy-compressed-image-transport \
+    ros-jazzy-image-proc \
+    ros-jazzy-rosbag2 \
     && sudo apt-get clean \
     && sudo rm -rf /var/lib/apt/lists/*
 
@@ -94,7 +95,7 @@ RUN sudo apt-get update \
 RUN sudo apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     python3-pip \
-    ros-humble-rmw-cyclonedds-cpp \
+    ros-jazzy-rmw-cyclonedds-cpp \
     && sudo apt-get clean \
     && sudo rm -rf /var/lib/apt/lists/*
 

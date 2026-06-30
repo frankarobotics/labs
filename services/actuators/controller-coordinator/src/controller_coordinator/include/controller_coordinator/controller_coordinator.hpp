@@ -15,7 +15,10 @@
 #pragma once
 
 #include <controller_manager_msgs/srv/list_controllers.hpp>
+#include <controller_manager_msgs/srv/list_hardware_components.hpp>
+#include <controller_manager_msgs/srv/set_hardware_component_state.hpp>
 #include <controller_manager_msgs/srv/switch_controller.hpp>
+#include <lifecycle_msgs/msg/state.hpp>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -80,8 +83,8 @@ class FrankaControllerCoordinator : public rclcpp::Node {
   static constexpr std::chrono::milliseconds kControllerLoadPerCallTimeout{500};
   // Sleep interval between retries in wait_for_controller_loaded.
   static constexpr std::chrono::milliseconds kControllerLoadPollInterval{200};
-  // Single-call timeout used to probe whether the controller manager is reachable.
-  static constexpr std::chrono::milliseconds kControllerManagerProbeTimeout{200};
+  // Single-call timeout used to probe whether the controller manager is reachable or if the hardware interface is active.
+  static constexpr std::chrono::milliseconds kProbeTimeout{200};
   // Hardware-level timeout forwarded to the switch_controller service request.
   static constexpr std::chrono::milliseconds kSwitchControllerHardwareTimeout{5000};
 
@@ -118,7 +121,13 @@ class FrankaControllerCoordinator : public rclcpp::Node {
   bool wait_for_controller_loaded(const std::string& controller_name,
                                    std::chrono::milliseconds total_timeout = kDefaultServiceTimeout);
   bool is_controller_manager_available(
-      std::chrono::milliseconds probe_timeout = kControllerManagerProbeTimeout);
+      std::chrono::milliseconds probe_timeout = kProbeTimeout);
+  bool is_hardware_interface_active(
+    std::chrono::milliseconds probe_timeout = kProbeTimeout
+  );
+  bool reactivate_hardware_interface(
+    std::chrono::milliseconds probe_timeout = kProbeTimeout
+  );
   void monitor_operating_controller();
   void on_controller_state_received(const std_msgs::msg::String& msg);
 
@@ -138,6 +147,10 @@ class FrankaControllerCoordinator : public rclcpp::Node {
   rclcpp::Client<controller_manager_msgs::srv::SwitchController>::SharedPtr
       switch_controller_client_;
   rclcpp::Client<controller_manager_msgs::srv::ListControllers>::SharedPtr list_controllers_client_;
+  rclcpp::Client<controller_manager_msgs::srv::ListHardwareComponents>::SharedPtr
+      list_hardware_components_client_;
+  rclcpp::Client<controller_manager_msgs::srv::SetHardwareComponentState>::SharedPtr
+      set_hardware_component_state_client_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr get_ready_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_operating_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_service_;

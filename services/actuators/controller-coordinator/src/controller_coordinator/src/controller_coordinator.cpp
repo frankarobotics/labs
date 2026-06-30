@@ -15,6 +15,7 @@
 #include "controller_coordinator/controller_coordinator.hpp"
 
 #include <chrono>
+#include <lifecycle_msgs/msg/state.hpp>
 #include <thread>
 
 namespace controller_coordinator {
@@ -105,6 +106,10 @@ void FrankaControllerCoordinator::declare_parameters() {
 void FrankaControllerCoordinator::initialize_service_clients() {
   std::string switch_controller_service = controller_manager_namespace_ + "/switch_controller";
   std::string list_controllers_service = controller_manager_namespace_ + "/list_controllers";
+  std::string list_hardware_components_service =
+      controller_manager_namespace_ + "/list_hardware_components";
+  std::string set_hardware_component_state_service =
+      controller_manager_namespace_ + "/set_hardware_component_state";
 
   RCLCPP_INFO(this->get_logger(), "Waiting for switch controller service: %s", switch_controller_service.c_str());
   RCLCPP_INFO(this->get_logger(), "Waiting for list controllers service: %s", list_controllers_service.c_str());
@@ -116,6 +121,16 @@ void FrankaControllerCoordinator::initialize_service_clients() {
   list_controllers_client_ = this->create_client<controller_manager_msgs::srv::ListControllers>(
       list_controllers_service, rmw_qos_profile_services_default,
       client_callback_group_);
+
+  list_hardware_components_client_ =
+      this->create_client<controller_manager_msgs::srv::ListHardwareComponents>(
+          list_hardware_components_service, rmw_qos_profile_services_default,
+          client_callback_group_);
+
+  set_hardware_component_state_client_ =
+      this->create_client<controller_manager_msgs::srv::SetHardwareComponentState>(
+          set_hardware_component_state_service, rmw_qos_profile_services_default,
+          client_callback_group_);
 
   if (!switch_controller_client_->wait_for_service(service_timeout_)) {
     RCLCPP_WARN(this->get_logger(), "Switch controller service not yet available: %s", switch_controller_service.c_str());
@@ -499,10 +514,103 @@ void FrankaControllerCoordinator::monitor_autorecovery_cycle() {
   }
   RCLCPP_INFO(this->get_logger(),
               "Autorecovery: controller manager is available, attempting recovery");
+
+  RCLCPP_INFO(this->get_logger(),
+              "Autorecovery: Reactivating hardware interface if not active ...");
+  
+  bool reactivated = reactivate_hardware_interface();
+  if (!reactivated) {
+    RCLCPP_ERROR(this->get_logger(), "Autorecovery: failed to reactivate hardware interface, transitioning to IDLE");
+    transition_to_idle();
+  }
+
+  RCLCPP_INFO(this->get_logger(), "Autorecovery: hardware interface is active, attempting to recover");
+
   if (!transition_autorecovery_to_ready()) {
     RCLCPP_ERROR(this->get_logger(), "Autorecovery failed, transitioning to IDLE");
     transition_to_idle();
   }
+}
+
+static bool ends_with_franka_hardware_interface(const std::string& name) {
+  static constexpr std::string_view kSuffix = "FrankaHardwareInterface";
+  return name.size() >= kSuffix.size() &&
+         name.compare(name.size() - kSuffix.size(), kSuffix.size(), kSuffix) == 0;
+}
+
+bool FrankaControllerCoordinator::is_hardware_interface_active(std::chrono::milliseconds probe_timeout) {
+  auto request =
+      std::make_shared<controller_manager_msgs::srv::ListHardwareComponents::Request>();
+  auto future = list_hardware_components_client_->async_send_request(request);
+
+  if (future.wait_for(probe_timeout) != std::future_status::ready) {
+    RCLCPP_WARN(this->get_logger(),
+                "list_hardware_components service call timed out, assuming interface inactive");
+    return false;
+  }
+
+  auto result = future.get();
+  for (const auto& component : result->component) {
+    if (ends_with_franka_hardware_interface(component.name) &&
+        component.state.id != lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
+      RCLCPP_DEBUG(this->get_logger(), "Hardware component '%s' is not active (state id: %u)",
+                   component.name.c_str(), component.state.id);
+      return false;
+    }
+  }
+  return true;
+}
+
+bool FrankaControllerCoordinator::reactivate_hardware_interface(std::chrono::milliseconds probe_timeout) {
+  auto list_request =
+      std::make_shared<controller_manager_msgs::srv::ListHardwareComponents::Request>();
+  auto list_future = list_hardware_components_client_->async_send_request(list_request);
+
+  if (list_future.wait_for(probe_timeout) != std::future_status::ready) {
+    RCLCPP_ERROR(this->get_logger(),
+                 "list_hardware_components service call timed out during reactivation");
+    return false;
+  }
+
+  bool all_ok = true;
+  auto list_result = list_future.get();
+  for (const auto& component : list_result->component) {
+    if (!ends_with_franka_hardware_interface(component.name) ||
+        component.state.id == lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
+      continue;
+    }
+
+    RCLCPP_INFO(this->get_logger(), "Reactivating hardware component '%s'",
+                component.name.c_str());
+
+    auto set_request =
+        std::make_shared<controller_manager_msgs::srv::SetHardwareComponentState::Request>();
+    set_request->name = component.name;
+    set_request->target_state.id = lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE;
+    set_request->target_state.label = "active";
+
+    auto set_future = set_hardware_component_state_client_->async_send_request(set_request);
+
+    if (set_future.wait_for(service_timeout_) != std::future_status::ready) {
+      RCLCPP_ERROR(this->get_logger(),
+                   "set_hardware_component_state service call timed out for '%s'",
+                   component.name.c_str());
+      all_ok = false;
+      continue;
+    }
+
+    if (!set_future.get()->ok) {
+      RCLCPP_ERROR(this->get_logger(),
+                   "set_hardware_component_state failed for hardware component '%s'",
+                   component.name.c_str());
+      all_ok = false;
+      continue;
+    }
+
+    RCLCPP_INFO(this->get_logger(), "Hardware component '%s' successfully reactivated",
+                component.name.c_str());
+  }
+  return all_ok;
 }
 
 void FrankaControllerCoordinator::monitor_operating_controller() {
@@ -530,7 +638,7 @@ void FrankaControllerCoordinator::monitor_operating_controller() {
 
   // When the Controller Manager becomes unavailable, we enter AUTORECOVERY. The next monitor cycles will
   // check if it has come back up and attempt to recover back to READY or time out and drop to IDLE.
-  if (!is_controller_manager_available()) {
+  if (!is_controller_manager_available() || !is_hardware_interface_active()) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     if (current_state_ != state) {
       return;
