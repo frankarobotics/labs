@@ -59,9 +59,9 @@ docker run --rm \
 
 ## Overview
 
-`dataset-builder` is the pipeline service responsible for dataset export. It is intentionally
-separate from `data-processor` so that dataset formats, metadata conventions, and packaging
-logic can evolve independently of the raw episode processing daemon.
+`dataset-builder` is the pipeline service responsible for dataset export. It is intentionally separate from
+`data-processor` so that dataset formats, metadata conventions, and packaging logic can evolve independently of the raw
+episode processing daemon.
 
 Supported target formats:
 
@@ -69,14 +69,13 @@ Supported target formats:
 | --------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `lerobot` | LeRobot v2.1 dataset structure with Parquet observations and MP4 videos; includes GR00T-specific files and observations. |
 
-The service is structured so additional formats can be plugged in behind the same CLI and
-service interface — see `src/services/dataset_builder.py`.
+The service is structured so additional formats can be plugged in behind the same CLI and service interface — see
+`src/services/dataset_builder.py`.
 
 ### Episode discovery
 
 By default the builder scans `/workspace/data/processed_episodes/` which follows the
-`YYYY/MM/DD/<uuid>/mcap/mcap_0.mcap` layout produced by `data-processor`. Filters narrow
-the selection:
+`YYYY/MM/DD/<uuid>/mcap/mcap_0.mcap` layout produced by `data-processor`. Filters narrow the selection:
 
 | Filter             | How it works                                                                                                                        |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -93,13 +92,12 @@ Use `--dry-run` to preview the matched episodes without converting.
 
 ### Topic manifest
 
-When `--deployment-dir` (or explicit config flags) is provided, the builder loads a
-`DatasetTopicManifest` from `config_station.yml` and `config_data_recorder.yml`. The manifest
-classifies every topic as `image`, `state`, `action`, or `ignored`, enforces the ordering
-defined in the station config, and filters out topics that were not actually recorded.
+When `--deployment-dir` (or explicit config flags) is provided, the builder loads a `DatasetTopicManifest` from
+`config_station.yml` and `config_data_recorder.yml`. The manifest classifies every topic as `image`, `state`, `action`,
+or `ignored`, enforces the ordering defined in the station config, and filters out topics that were not actually
+recorded.
 
-Without a manifest, the reader falls back to schema-name heuristics, which is not recommended
-for production datasets.
+Without a manifest, the reader falls back to schema-name heuristics, which is not recommended for production datasets.
 
 ## CLI Reference
 
@@ -152,10 +150,9 @@ usage: main.py [-h] [--verbose] [--format {lerobot}]
 
 ## Notes
 
-- The service expects MCAP input that already contains `foxglove.CompressedVideo` messages
-  (i.e. output from `data-processor`, not raw `data-recorder` output).
-- `lerobot` is installed inside the container image so its dependencies are not required on
-  the host for local development.
-- Set `DATA_ROOT` (default `../../../data`) and `DEPLOYMENTS_ROOT`
-  (default `../../../deployments`) environment variables to point the Docker volume mounts
-  at a non-default location.
+- The service expects MCAP input that already contains `foxglove.CompressedVideo` messages (i.e. output from
+  `data-processor`, not raw `data-recorder` output).
+- `lerobot` is installed inside the container image so its dependencies are not required on the host for local
+  development.
+- Set `DATA_ROOT` (default `../../../data`) and `DEPLOYMENTS_ROOT` (default `../../../deployments`) environment
+  variables to point the Docker volume mounts at a non-default location.

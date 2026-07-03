@@ -1,18 +1,24 @@
 # Controller Coordinator
 
-ROS2 node that manages robot arm controller state transitions between Idle, Ready, Syncing, Following, and Autorecovery modes.
+ROS2 node that manages robot arm controller state transitions between Idle, Ready, Syncing, Following, and Autorecovery
+modes.
 
 ## States
 
 - **Idle**: All controllers inactive
-- **Ready**: Ready-state controller active (prepares the robot for the next step in the pipeline by activating a controller such as gravity compensation for manual positioning or a move-to-position controller to reach a specific configuration before proceeding to data collection, inference, etc.)
+- **Ready**: Ready-state controller active (prepares the robot for the next step in the pipeline by activating a
+  controller such as gravity compensation for manual positioning or a move-to-position controller to reach a specific
+  configuration before proceeding to data collection, inference, etc.)
 - **Syncing**: Operating controller active, moving to start position
 - **Following**: Operating controller active, following target joint states
-- **Autorecovery**: A controller died unexpectedly; the coordinator attempts to re-activate the ready controller, transitioning to **Ready** on success or **Idle** on failure
+- **Autorecovery**: A controller died unexpectedly; the coordinator attempts to re-activate the ready controller,
+  transitioning to **Ready** on success or **Idle** on failure
 
-The transition from Syncing to Following happens automatically when the operating controller reports that syncing is complete (via its `~/state` topic).
+The transition from Syncing to Following happens automatically when the operating controller reports that syncing is
+complete (via its `~/state` topic).
 
-Autorecovery is entered automatically when a controller dies in `Ready`, `Syncing`, or `Following`. It can also be requested externally via the `start_autorecovery` service.
+Autorecovery is entered automatically when a controller dies in `Ready`, `Syncing`, or `Following`. It can also be
+requested externally via the `start_autorecovery` service.
 
 ## Launch
 
