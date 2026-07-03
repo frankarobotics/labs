@@ -50,6 +50,7 @@
 - All Docker containers were upgraded to use `ROS 2 Jazzy` (no longer a mix of `ROS 2 Humble` and `ROS 2 Jazzy`)
 - The version of the `robotiq`, `realsense`, `franka_follower_controllers` packages were updated to their newest respective versions
 - **Breaking Change:** An update to `franka_follower_controllers` requires the renaming of `arm_id` to `robot_type` in the `config_franka_robot.yml` configuration file of every deployment.
+- The `example_station` deployment got renamed to `fr3_duo_example`. Users who edited this deployment might need to stash their changes before pulling and then re-apply them.
 
 ## [0.1.1] - 2026-06-01
 

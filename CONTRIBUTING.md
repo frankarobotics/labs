@@ -24,7 +24,7 @@ At minimum, a new service should typically include:
   - `*.dockerfile` (matching existing naming patterns)
 - `src/` (and `tests/` if applicable).
 
-Then wire the new service into the example deployment at `deployments/example_station/`.
+Then wire the new service into a new example deployment.
 
 ### PR checklist
 

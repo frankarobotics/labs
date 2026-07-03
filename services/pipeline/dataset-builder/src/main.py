@@ -89,7 +89,7 @@ def parse_args() -> argparse.Namespace:  # noqa: C901
     parser.add_argument(
         "--deployment-dir",
         type=Path,
-        help="Path to a deployment directory (e.g. deployments/example_station). "
+        help="Path to a deployment directory (e.g. deployments/fr3_duo_example). "
         "Automatically resolves config_station.yml, config_data_recorder.yml, and modality.json from that folder "
         "unless --station-config / --recorder-config / --modality-config are given explicitly.",
     )

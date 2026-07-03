@@ -1,5 +1,5 @@
 metadata:
-  station_id: example_station
+  station_id: fr3_duo_example
 
 embodiment:
   teleop_robots:

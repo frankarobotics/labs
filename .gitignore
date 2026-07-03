@@ -26,10 +26,6 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# Deployments folders
-deployments/*
-!deployments/example_station
-
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
@@ -227,7 +223,7 @@ data/*
 
 # Deployments folders
 deployments/*
-!deployments/example_station
+!deployments/fr3_duo_example
 
 # Custom
 tmp

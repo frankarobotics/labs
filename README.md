@@ -117,7 +117,7 @@ task install:dependencies
 git submodule update --init
 
 # Switch into your station folder and edit configs to match your hardware layout
-cd deployments/example_station
+cd deployments/fr3_duo_example
 ```
 
 ### Deployment
@@ -130,10 +130,10 @@ Kindly note that most individual services also contain `README.md` files for ser
 
 #### Running & Managing the Stack
 
-Manage all services from a deployment directory (e.g. `deployments/example_station/`):
+Manage all services from a deployment directory (e.g. `deployments/fr3_duo_example/`):
 
 ```bash
-cd deployments/example_station
+cd deployments/fr3_duo_example
 task start     # on first run Tilt builds all images automatically (this can take a while)
 ```
 

@@ -37,13 +37,13 @@ task dataset-builder-create \
 # uv — all episodes with filters
 uv run src/main.py \
   --dataset-name my-dataset \
-  --deployment-dir /workspace/deployments/example_station \
+  --deployment-dir /workspace/deployments/fr3_duo_example \
   --from 2026-05-01 --to 2026-05-31
 
 # uv — explicit file(s)
 uv run src/main.py \
   --dataset-name my-dataset \
-  --deployment-dir /workspace/deployments/example_station \
+  --deployment-dir /workspace/deployments/fr3_duo_example \
   --input /workspace/data/processed_episodes/2026/05/01/<uuid>/mcap/mcap_0.mcap
 
 # Docker
@@ -53,7 +53,7 @@ docker run --rm \
   registry.localhost/labs/dataset-builder:latest \
   ./entrypoint.sh \
     --dataset-name my-dataset \
-    --deployment-dir /workspace/deployments/example_station \
+    --deployment-dir /workspace/deployments/fr3_duo_example \
     --from 2026-05-01
 ```
 
@@ -127,7 +127,7 @@ usage: main.py [-h] [--verbose] [--format {lerobot}]
 | `--output`          | `/workspace/data/datasets/lerobot/<dataset-name>` | Output directory (derived from `--dataset-name` when omitted)                                |
 | `--format`          | `lerobot`                                         | Target dataset format                                                                        |
 | `--fps`             | `20.0`                                            | Target frame rate for synchronization                                                        |
-| `--deployment-dir`  | `/workspace/deployments/example_station`          | Resolves `config_station.yml`, `config_data_recorder.yml`, and `modality.json` automatically |
+| `--deployment-dir`  | `/workspace/deployments/fr3_duo_example`          | Resolves `config_station.yml`, `config_data_recorder.yml`, and `modality.json` automatically |
 | `--station-config`  | `<deployment-dir>/config_station.yml`             | Override station config path                                                                 |
 | `--recorder-config` | `<deployment-dir>/config_data_recorder.yml`       | Override recorder config path                                                                |
 | `--modality-config` | `<deployment-dir>/modality.json`                  | Override modality.json path                                                                  |

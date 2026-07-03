@@ -60,13 +60,13 @@ The following services are available for deployment. Core services are always re
 
 ## Available Deployments
 
-### example_station
+### fr3_duo_example
 
 Reference implementation demonstrating a dual-arm Franka bimanual setup with multiple cameras and teleoperation modalities, specifically tailored to the Franka Vision and Manipulation Kit.
 
 #### Hardware Configuration
 
-This station (`station_id: example_station`) includes:
+This station (`station_id: fr3_duo_example`) includes:
 
 **Actuators:**
 
@@ -88,7 +88,7 @@ This station (`station_id: example_station`) includes:
 
 #### Quick Configuration Guide for Franka Vision & Manipulation Kit
 
-If you are using the hardware of the Franka Vision & Manipulation Kit, you can quickly get started with the default settings with just having to modify the following files in the `example_station` folder:
+If you are using the hardware of the Franka Vision & Manipulation Kit, you can quickly get started with the default settings with just having to modify the following files in the `fr3_duo_example` folder:
 
 - Update `robot_ip` in `config_franka_robot.yml` — the fixed IP of each Franka robot arm, typically configured in the robot's network settings.
 - Update `com_port` in `config_robotiq_gripper.yml` — find available USB serial devices with `ls /dev/serial/by-id/` and copy the path of the FTDI USB-TO-RS-485 converter (see [Robotiq Gripper README](../services/actuators/robotiq-gripper/README.md#configuration)).
@@ -111,7 +111,7 @@ After updating the quick-start config files above:
 
 3. **Test your deployment**
    ```bash
-   cd deployments/example_station
+   cd deployments/fr3_duo_example
    task build                  # Build service images
    task start                  # Start all services with Tilt
    ```
@@ -166,7 +166,7 @@ In `config_data_processor.yml`, `delete_raw_episode: false` keeps raw episode da
 
 ### Task Configuration
 
-Tasks define the demonstrations that operators can select during data collection. The `config_tasks.yml` file contains a list of task definitions. Check out the configuration in `example_station` as exemplary reference.
+Tasks define the demonstrations that operators can select during data collection. The `config_tasks.yml` file contains a list of task definitions. Check out the configuration in `fr3_duo_example` as exemplary reference.
 
 **Task fields:**
 
@@ -186,7 +186,7 @@ If you have multiple stations or your station varies from the default setup with
 1. **Copy the example station** as a template:
 
    ```bash
-   cp -r deployments/example_station deployments/my_station
+   cp -r deployments/fr3_duo_example deployments/my_station
    cd deployments/my_station
    ```
 
