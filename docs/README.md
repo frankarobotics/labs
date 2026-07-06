@@ -1,7 +1,8 @@
 # Architecture Diagrams
 
-The architecture is defined in [`workspace.dsl`](workspace.dsl) using the [Structurizr DSL](https://docs.structurizr.com/dsl).
-The compiled workspace is stored in [`workspace.json`](workspace.json) and can be used to restore the diagram layout in Structurizr.
+The architecture is defined in [`workspace.dsl`](workspace.dsl) using the
+[Structurizr DSL](https://docs.structurizr.com/dsl). The compiled workspace is stored in
+[`workspace.json`](workspace.json) and can be used to restore the diagram layout in Structurizr.
 
 ## Exporting SVGs
 

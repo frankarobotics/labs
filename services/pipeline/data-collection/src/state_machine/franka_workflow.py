@@ -100,7 +100,6 @@ class FrankaWorkflowStateMachine(BaseWorkflowStateMachine):
             logger.info(f"Controller coordinator {namespace!r} is FOLLOWING, waiting for {list(pending.keys())}")
 
     def _on_coordinator_autorecovery(self, namespace: str) -> None:
-
         logger.warning(f"Controller coordinator {namespace!r} entered AUTORECOVERY, mirroring workflow state")
         try:
             self.start_autorecovery()
