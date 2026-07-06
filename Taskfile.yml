@@ -187,7 +187,7 @@ tasks:
   #
   # The output is written to /workspace/data/datasets/lerobot/<dataset-name>.
   # Override with OUTPUT_DIR if a non-standard path is needed.
-  # DEPLOYMENT_DIR defaults to /workspace/deployments/example_station.
+  # DEPLOYMENT_DIR defaults to /workspace/deployments/fr3_duo_example.
   # EPISODES_DIR overrides where processed episodes are discovered.
   # Pass extra CLI flags via CLI_ARGS, e.g. CLI_ARGS="--fps 30".
   # Override data paths via DATA_ROOT (default ./data) and DEPLOYMENTS_ROOT (default ./deployments).
@@ -211,7 +211,7 @@ tasks:
     desc: "Build a LeRobot dataset from processed episodes (supports filters: FROM, TO, TASK_DESC, EPISODE_ID, EXCLUDE_ID, LIMIT, INCLUDE_FAILED, DRY_RUN; or explicit INPUT_MCAP)"
     vars:
       DATASET_NAME: '{{.DATASET_NAME | default (.Env.DATASET_NAME | default "my-dataset")}}'
-      DEPLOYMENT_DIR: '{{.DEPLOYMENT_DIR | default (.Env.DEPLOYMENT_DIR | default "/workspace/deployments/example_station")}}'
+      DEPLOYMENT_DIR: '{{.DEPLOYMENT_DIR | default (.Env.DEPLOYMENT_DIR | default "/workspace/deployments/fr3_duo_example")}}'
       INPUT_MCAP: '{{.INPUT_MCAP | default ""}}'
       EPISODES_DIR: '{{.EPISODES_DIR | default ""}}'
       FROM: '{{.FROM | default ""}}'
