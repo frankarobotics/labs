@@ -18,11 +18,13 @@
 #include <controller_manager_msgs/srv/list_hardware_components.hpp>
 #include <controller_manager_msgs/srv/set_hardware_component_state.hpp>
 #include <controller_manager_msgs/srv/switch_controller.hpp>
+#include <franka_msgs/action/error_recovery.hpp>
 #include <lifecycle_msgs/msg/state.hpp>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp_action/rclcpp_action.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <std_srvs/srv/trigger.hpp>
 #include <string>
@@ -125,6 +127,7 @@ class FrankaControllerCoordinator : public rclcpp::Node {
   bool is_hardware_interface_active(
     std::chrono::milliseconds probe_timeout = kProbeTimeout
   );
+  bool clear_robot_error();
   bool reactivate_hardware_interface(
     std::chrono::milliseconds probe_timeout = kProbeTimeout
   );
@@ -151,6 +154,8 @@ class FrankaControllerCoordinator : public rclcpp::Node {
       list_hardware_components_client_;
   rclcpp::Client<controller_manager_msgs::srv::SetHardwareComponentState>::SharedPtr
       set_hardware_component_state_client_;
+  rclcpp_action::Client<franka_msgs::action::ErrorRecovery>::SharedPtr
+      error_recovery_client_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr get_ready_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_operating_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_service_;
