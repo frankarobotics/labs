@@ -8,4 +8,4 @@ echo "source /opt/ros/jazzy/setup.bash" >>~/.bashrc
 # For debugging
 # sleep infinity
 
-uv run src/main.py
+uv run --no-sync src/main.py

@@ -53,6 +53,7 @@
   the `config_franka_robot.yml` configuration file of every deployment.
 - The `example_station` deployment got renamed to `fr3_duo_example`. Users who edited this deployment might need to
   stash their changes before pulling and then re-apply them.
+- Services can now be started offline after a prior online build
 
 ## [0.1.1] - 2026-06-01
 
