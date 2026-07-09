@@ -132,6 +132,14 @@ void FrankaControllerCoordinator::initialize_service_clients() {
           set_hardware_component_state_service, rmw_qos_profile_services_default,
           client_callback_group_);
 
+  std::string ns = this->get_namespace();
+  std::string error_recovery_action =
+      (ns == "/" ? "" : ns) + "/action_server/error_recovery";
+  error_recovery_client_ =
+      rclcpp_action::create_client<franka_msgs::action::ErrorRecovery>(
+          this, error_recovery_action, client_callback_group_);
+  RCLCPP_INFO(this->get_logger(), "Error recovery action: %s", error_recovery_action.c_str());
+
   if (!switch_controller_client_->wait_for_service(service_timeout_)) {
     RCLCPP_WARN(this->get_logger(), "Switch controller service not yet available: %s", switch_controller_service.c_str());
   }
@@ -516,6 +524,15 @@ void FrankaControllerCoordinator::monitor_autorecovery_cycle() {
               "Autorecovery: controller manager is available, attempting recovery");
 
   RCLCPP_INFO(this->get_logger(),
+              "Autorecovery: Clearing robot error ...");
+
+  if (!clear_robot_error()) {
+    RCLCPP_ERROR(this->get_logger(), "Autorecovery: failed to clear robot error, transitioning to IDLE");
+    transition_to_idle();
+    return;
+  }
+
+  RCLCPP_INFO(this->get_logger(),
               "Autorecovery: Reactivating hardware interface if not active ...");
   
   bool reactivated = reactivate_hardware_interface();
@@ -536,6 +553,48 @@ static bool ends_with_franka_hardware_interface(const std::string& name) {
   static constexpr std::string_view kSuffix = "FrankaHardwareInterface";
   return name.size() >= kSuffix.size() &&
          name.compare(name.size() - kSuffix.size(), kSuffix.size(), kSuffix) == 0;
+}
+
+bool FrankaControllerCoordinator::clear_robot_error() {
+  if (!error_recovery_client_->wait_for_action_server(service_timeout_)) {
+    RCLCPP_ERROR(this->get_logger(),
+                 "clear_robot_error: error recovery action server not available");
+    return false;
+  }
+
+  auto goal = franka_msgs::action::ErrorRecovery::Goal();
+  auto goal_future = error_recovery_client_->async_send_goal(goal);
+
+  if (goal_future.wait_for(service_timeout_) != std::future_status::ready) {
+    RCLCPP_ERROR(this->get_logger(),
+                 "clear_robot_error: timed out waiting for goal acceptance");
+    return false;
+  }
+
+  auto goal_handle = goal_future.get();
+  if (!goal_handle) {
+    RCLCPP_ERROR(this->get_logger(),
+                 "clear_robot_error: goal was rejected by the action server");
+    return false;
+  }
+
+  auto result_future = error_recovery_client_->async_get_result(goal_handle);
+  if (result_future.wait_for(service_timeout_) != std::future_status::ready) {
+    RCLCPP_ERROR(this->get_logger(),
+                 "clear_robot_error: timed out waiting for result");
+    return false;
+  }
+
+  auto wrapped_result = result_future.get();
+  if (wrapped_result.code != rclcpp_action::ResultCode::SUCCEEDED) {
+    RCLCPP_ERROR(this->get_logger(),
+                 "clear_robot_error: action did not succeed (code: %d)",
+                 static_cast<int>(wrapped_result.code));
+    return false;
+  }
+
+  RCLCPP_INFO(this->get_logger(), "clear_robot_error: robot error cleared successfully");
+  return true;
 }
 
 bool FrankaControllerCoordinator::is_hardware_interface_active(std::chrono::milliseconds probe_timeout) {

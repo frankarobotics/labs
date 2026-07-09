@@ -29,7 +29,9 @@ option(CHECK_TIDY "Adds clang-tidy tests" OFF)
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
 find_package(controller_manager_msgs REQUIRED)
+find_package(franka_msgs REQUIRED)
 find_package(lifecycle_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(std_msgs REQUIRED)
@@ -38,7 +40,7 @@ add_library(${PROJECT_NAME} SHARED src/controller_coordinator.cpp)
 target_include_directories(
   ${PROJECT_NAME} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                          $<INSTALL_INTERFACE:include>)
-ament_target_dependencies(${PROJECT_NAME} rclcpp controller_manager_msgs lifecycle_msgs
+ament_target_dependencies(${PROJECT_NAME} rclcpp rclcpp_action controller_manager_msgs franka_msgs lifecycle_msgs
                           std_srvs std_msgs)
 
 add_executable(controller_coordinator_node src/controller_coordinator_node.cpp)
@@ -57,7 +59,7 @@ install(DIRECTORY config launch DESTINATION share/${PROJECT_NAME})
 
 ament_export_include_directories(include)
 ament_export_libraries(${PROJECT_NAME})
-ament_export_dependencies(rclcpp controller_manager_msgs lifecycle_msgs std_srvs)
+ament_export_dependencies(rclcpp rclcpp_action controller_manager_msgs franka_msgs lifecycle_msgs std_srvs)
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)

@@ -7,11 +7,25 @@ RUN apt-get update && \
     ros-jazzy-rmw-cyclonedds-cpp \
     ros-jazzy-cyclonedds \
     python3-rosdep \
+    git \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     rosdep init || true
 
 WORKDIR /workspace
+
+SHELL ["/bin/bash", "-c"]
+
+RUN mkdir -p /workspace/src/third_party && \
+    cd /workspace/src/third_party && \
+    git clone --depth 1 --filter=blob:none --sparse \
+        https://github.com/frankaemika/franka_ros2.git -b v3.4.0 && \
+    cd franka_ros2 && \
+    git sparse-checkout set franka_msgs
+
+RUN source /opt/ros/jazzy/setup.bash && \
+    cd /workspace/src && \
+    colcon build --packages-select franka_msgs --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 ####################################################################################################
 # Stage: dev
@@ -41,6 +55,7 @@ COPY src src
 
 RUN cd /workspace/src && \
     source /opt/ros/jazzy/setup.bash && \
+    source /workspace/src/install/setup.bash && \
     colcon build --packages-select controller_coordinator
 
 COPY entrypoint.sh entrypoint.sh
@@ -79,6 +94,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* && \
     cd /workspace/src && \
     source /opt/ros/jazzy/setup.bash && \
+    source /workspace/src/install/setup.bash && \
     colcon build --packages-select controller_coordinator
 
 COPY entrypoint.sh entrypoint.sh
