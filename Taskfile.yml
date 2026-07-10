@@ -38,13 +38,21 @@ tasks:
         msg: "SERVICE is required. Usage: task build SERVICE=name"
     cmds:
       - |
-        SERVICE_PATH=$(find services -type d -name "{{.SERVICE}}" 2>/dev/null | head -1)
-        if [ -z "$SERVICE_PATH" ]; then
+        SERVICE_PATHS=$(find services -mindepth 2 -maxdepth 2 -type d -name "{{.SERVICE}}" -exec test -f '{}/docker-compose.yml' \; -print 2>/dev/null)
+        SERVICE_COUNT=$(printf '%s' "$SERVICE_PATHS" | grep -c .)
+        if [ "$SERVICE_COUNT" -eq 0 ]; then
           echo "Error: Service not found: {{.SERVICE}}" >&2
           exit 1
         fi
+        if [ "$SERVICE_COUNT" -gt 1 ]; then
+          echo "Error: Ambiguous service '{{.SERVICE}}' matches multiple directories:" >&2
+          printf '  %s\n' $SERVICE_PATHS >&2
+          exit 1
+        fi
+        SERVICE_PATH="$SERVICE_PATHS"
         cd "$SERVICE_PATH"
-        docker compose build $([ "${NO_CACHE}" = "1" ] && echo "--no-cache") \
+        DOCKER_BUILDKIT=1 docker compose build $([ "${NO_CACHE}" = "1" ] && echo "--no-cache") \
+          --build-arg BUILDKIT_INLINE_CACHE=1 \
           --build-arg BUILD_TARGET={{.BUILD_TARGET}} \
           --build-arg BUILD_VERSION={{.BUILD_VERSION}} \
           --build-arg GIT_COMMIT={{.GIT_COMMIT}}
@@ -57,11 +65,18 @@ tasks:
         msg: "SERVICE is required. Usage: task start SERVICE=name"
     cmds:
       - |
-        SERVICE_PATH=$(find services -type d -name "{{.SERVICE}}" 2>/dev/null | head -1)
-        if [ -z "$SERVICE_PATH" ]; then
+        SERVICE_PATHS=$(find services -mindepth 2 -maxdepth 2 -type d -name "{{.SERVICE}}" -exec test -f '{}/docker-compose.yml' \; -print 2>/dev/null)
+        SERVICE_COUNT=$(printf '%s' "$SERVICE_PATHS" | grep -c .)
+        if [ "$SERVICE_COUNT" -eq 0 ]; then
           echo "Error: Service not found: {{.SERVICE}}" >&2
           exit 1
         fi
+        if [ "$SERVICE_COUNT" -gt 1 ]; then
+          echo "Error: Ambiguous service '{{.SERVICE}}' matches multiple directories:" >&2
+          printf '  %s\n' $SERVICE_PATHS >&2
+          exit 1
+        fi
+        SERVICE_PATH="$SERVICE_PATHS"
         cd "$SERVICE_PATH"
         docker compose up -d
 
@@ -72,11 +87,18 @@ tasks:
         msg: "SERVICE is required. Usage: task stop SERVICE=name"
     cmds:
       - |
-        SERVICE_PATH=$(find services -type d -name "{{.SERVICE}}" 2>/dev/null | head -1)
-        if [ -z "$SERVICE_PATH" ]; then
+        SERVICE_PATHS=$(find services -mindepth 2 -maxdepth 2 -type d -name "{{.SERVICE}}" -exec test -f '{}/docker-compose.yml' \; -print 2>/dev/null)
+        SERVICE_COUNT=$(printf '%s' "$SERVICE_PATHS" | grep -c .)
+        if [ "$SERVICE_COUNT" -eq 0 ]; then
           echo "Error: Service not found: {{.SERVICE}}" >&2
           exit 1
         fi
+        if [ "$SERVICE_COUNT" -gt 1 ]; then
+          echo "Error: Ambiguous service '{{.SERVICE}}' matches multiple directories:" >&2
+          printf '  %s\n' $SERVICE_PATHS >&2
+          exit 1
+        fi
+        SERVICE_PATH="$SERVICE_PATHS"
         cd "$SERVICE_PATH"
         docker compose down
 

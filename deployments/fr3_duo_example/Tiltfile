@@ -21,7 +21,12 @@ version_settings(check_updates=False)
 docker_compose("docker-compose.yml")
 
 git_commit = str(local("git -C ../../ rev-parse HEAD")).strip()
-common_build_args = {"BUILD_TARGET": "dev", "BUILD_VERSION": git_commit, "GIT_COMMIT": git_commit}
+common_build_args = {
+    "BUILD_TARGET": "dev",
+    "BUILD_VERSION": git_commit,
+    "GIT_COMMIT": git_commit,
+    "BUILDKIT_INLINE_CACHE": "1",
+}
 
 # Docker builds
 docker_build(
@@ -30,6 +35,7 @@ docker_build(
     dockerfile="../../services/pipeline/data-collection/data-collection.dockerfile",
     build_args=common_build_args,
     target="dev",
+    cache_from="registry.localhost/labs/data-collection:latest",
     live_update=[
         sync(
             "../../services/pipeline/data-collection/src",
@@ -46,6 +52,7 @@ docker_build(
     dockerfile="../../services/pipeline/data-recorder/data-recorder.dockerfile",
     build_args=common_build_args,
     target="dev",
+    cache_from="registry.localhost/labs/data-recorder:latest",
     live_update=[
         sync(
             "../../services/pipeline/data-recorder/src",
@@ -62,6 +69,7 @@ docker_build(
     dockerfile="../../services/input/franka-gello/franka-gello.dockerfile",
     build_args=common_build_args,
     target="dev",
+    cache_from="registry.localhost/labs/franka-gello:latest",
     live_update=[
         sync(
             "../../services/input/franka-gello/src",
@@ -78,6 +86,7 @@ docker_build(
     dockerfile="../../services/pipeline/data-processor/data-processor.dockerfile",
     build_args=common_build_args,
     target="dev",
+    cache_from="registry.localhost/labs/data-processor:latest",
     live_update=[
         sync(
             "../../services/pipeline/data-processor/src",
@@ -94,6 +103,7 @@ docker_build(
     dockerfile="../../services/actuators/franka-robot/franka-robot.dockerfile",
     build_args=common_build_args,
     target="dev",
+    cache_from="registry.localhost/labs/franka-robot:latest",
     # No live_update: purely a C++ ROS 2 service. Any source changes require a full image rebuild.
 )
 
@@ -103,6 +113,7 @@ docker_build(
     dockerfile="../../services/actuators/controller-coordinator/controller-coordinator.dockerfile",
     build_args=common_build_args,
     target="dev",
+    cache_from="registry.localhost/labs/controller-coordinator:latest",
     # No live_update: purely a C++ ROS 2 service. Any source changes require a full image rebuild.
 )
 
@@ -112,6 +123,7 @@ docker_build(
     dockerfile="../../services/actuators/robotiq-gripper/robotiq-gripper.dockerfile",
     build_args=common_build_args,
     target="dev",
+    cache_from="registry.localhost/labs/robotiq-gripper:latest",
     # No live_update: purely a C++ ROS 2 service compiled at image build time.
     # Any changes require a full image rebuild.
 )
@@ -122,6 +134,7 @@ docker_build(
     dockerfile="../../services/sensors/zed-camera/zed-camera.dockerfile",
     build_args=common_build_args,
     target="dev",
+    cache_from="registry.localhost/labs/zed-camera:latest",
     live_update=[
         sync(
             "../../services/sensors/zed-camera/src",
@@ -141,6 +154,7 @@ docker_build(
     dockerfile="../../services/sensors/realsense-camera/realsense-camera.dockerfile",
     build_args=common_build_args,
     target="dev",
+    cache_from="registry.localhost/labs/realsense-camera:latest",
     live_update=[
         sync(
             "../../services/sensors/realsense-camera/src",
@@ -157,6 +171,7 @@ docker_build(
     dockerfile="../../services/pipeline/data-collection-ui/data-collection-ui.dockerfile",
     build_args=common_build_args,
     target="dev",
+    cache_from="registry.localhost/labs/data-collection-ui:latest",
     live_update=[
         sync(
             "../../services/pipeline/data-collection-ui/app",
