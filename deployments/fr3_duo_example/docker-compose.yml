@@ -157,9 +157,12 @@ services:
       <<: [*common-ros-env, *common-app-env]
       FAKE_HARDWARE: false
 
+  # GPU-only (runtime: nvidia); gated behind the "gpu" compose profile, which the
+  # Taskfile enables automatically when the NVIDIA runtime is detected.
   zed-camera-head:
     image: registry.localhost/labs/zed-camera:latest
     container_name: zed-camera-head
+    profiles: ["gpu"]
     network_mode: host
     restart: unless-stopped
     stop_signal: SIGINT

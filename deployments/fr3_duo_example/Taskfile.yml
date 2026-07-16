@@ -1,6 +1,13 @@
 version: '3'
 
 vars:
+  # "yes" when the NVIDIA container runtime is available. The ZED camera is
+  # GPU-only (runtime: nvidia) and is skipped when this is not "yes".
+  HAS_NVIDIA:
+    sh: docker info 2>/dev/null | grep -i runtimes | grep -qi nvidia && echo yes || echo no
+  # Compose profile enabling the GPU-only services (empty without NVIDIA runtime).
+  GPU_PROFILE:
+    sh: '[ "{{.HAS_NVIDIA}}" = "yes" ] && echo gpu || echo ""'
   # Service image names for building — must match directory names under services/.
   # Note: compose service names in docker-compose.yml may differ
   # (e.g. realsense-camera-wrist, zed-camera-head) and are used for logs/exec.
@@ -24,7 +31,10 @@ tasks:
         docker pull ghcr.io/astral-sh/uv:0.8.22 || true &
         docker pull node:22 || true &
         docker pull ros:jazzy-ros-base || true &
-        docker pull stereolabs/zed:5.0-devel-cuda12.8-ubuntu24.04 || true &
+        # ZED base image (~24 GB) is only needed on machines with the NVIDIA runtime.
+        if [[ "{{.HAS_NVIDIA}}" == "yes" ]]; then
+          docker pull stereolabs/zed:5.0-devel-cuda12.8-ubuntu24.04 || true &
+        fi
         wait
 
   build:
@@ -32,12 +42,24 @@ tasks:
     deps: [_cache-deps]
     cmds:
       - for: {var: SERVICES}
-        cmd: task -d ../../ build SERVICE={{.ITEM}} BUILD_TARGET=${BUILD_TARGET:-dev} NO_CACHE=${NO_CACHE:-0}
+        cmd: |
+          if [[ "{{.ITEM}}" == "zed-camera" && "{{.HAS_NVIDIA}}" != "yes" ]]; then
+            echo "Skipping zed-camera build: NVIDIA container runtime not detected."
+          else
+            task -d ../../ build SERVICE={{.ITEM}} BUILD_TARGET=${BUILD_TARGET:-dev} NO_CACHE=${NO_CACHE:-0}
+          fi
 
   start:
     desc: Start the services with tilt
     cmds:
-      - xhost +
+      - |
+        if [ -n "${DISPLAY:-}" ] && command -v xhost >/dev/null 2>&1 && xhost >/dev/null 2>&1; then
+          xhost +local:root || true
+          echo "X server detected on DISPLAY=$DISPLAY; native GUI apps enabled."
+        else
+          echo "No X server detected (DISPLAY='${DISPLAY:-}'); skipping xhost."
+          echo "Native GUI apps are disabled; use the browser UI on http://<host>:10360 (Tilt) / the data-collection-ui port."
+        fi
       - tilt up --port 10360 --host 0.0.0.0
 
   stop:
@@ -59,12 +81,12 @@ tasks:
   start-prod:
     desc: Start production services with docker compose
     cmds:
-      - docker compose up -d
+      - COMPOSE_PROFILES={{.GPU_PROFILE}} docker compose up -d
 
   stop-prod:
     desc: Stop production services
     cmds:
-      - docker compose down
+      - COMPOSE_PROFILES={{.GPU_PROFILE}} docker compose down
 
   restart-prod:
     desc: Restart production services
