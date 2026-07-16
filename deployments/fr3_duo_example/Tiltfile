@@ -18,7 +18,20 @@ update_settings(
 
 version_settings(check_updates=False)
 
-docker_compose("docker-compose.yml")
+# The ZED camera is GPU-only (runtime: nvidia). Only enable it when the NVIDIA
+# container runtime is present so the rest of the stack still comes up on
+# GPU-less machines.
+has_nvidia_runtime = str(local(
+    "docker info 2>/dev/null | grep -i runtimes | grep -qi nvidia && echo yes || echo no",
+    quiet=True,
+    echo_off=True,
+)).strip() == "yes"
+
+if has_nvidia_runtime:
+    docker_compose("docker-compose.yml", profiles=["gpu"])
+else:
+    print("NVIDIA runtime not detected - ZED camera service disabled.")
+    docker_compose("docker-compose.yml")
 
 git_commit = str(local("git -C ../../ rev-parse HEAD")).strip()
 common_build_args = {
@@ -146,7 +159,7 @@ docker_build(
         # NOT recompiled — a full image rebuild is required for those.
         restart_container(),
     ],
-)
+) if has_nvidia_runtime else None
 
 docker_build(
     ref="registry.localhost/labs/realsense-camera:latest",
@@ -189,7 +202,8 @@ dc_resource("data-collection-ui", labels=["pipeline"])
 dc_resource("data-processor", labels=["pipeline"])
 dc_resource("data-recorder", labels=["pipeline"])
 dc_resource("realsense-camera-wrist", labels=["sensors"])
-dc_resource("zed-camera-head", labels=["sensors"])
+if has_nvidia_runtime:
+    dc_resource("zed-camera-head", labels=["sensors"])
 dc_resource("controller-coordinator", labels=["actuators"])
 dc_resource("franka-robot", labels=["actuators"])
 dc_resource("robotiq-gripper", labels=["actuators"])
