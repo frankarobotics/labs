@@ -21,6 +21,7 @@ tasks:
     # Cache build dependencies for air-gapped deployments
     cmds:
       - |
+        docker pull ghcr.io/astral-sh/uv:0.8.22 || true &
         docker pull node:22 || true &
         docker pull ros:jazzy-ros-base || true &
         docker pull stereolabs/zed:5.0-devel-cuda12.8-ubuntu24.04 || true &

@@ -13,4 +13,4 @@ echo "source /opt/ros/jazzy/setup.bash" >>~/.bashrc
 # For debugging
 # sleep infinity
 
-uv run src/main.py --ros-args --log-level rmw_cyclonedds_cpp:=ERROR
+uv run --no-sync src/main.py --ros-args --log-level rmw_cyclonedds_cpp:=ERROR
