@@ -1,67 +1,27 @@
 [project]
-name = "data_collection"
+name = "pipeline-configs"
 version = "0.1.0"
-description = "Data Collection Service"
-readme = "README.md"
+description = "Shared config models for the pipeline services (station, ...)."
 license = "Apache-2.0"
 requires-python = ">=3.12"
 dependencies = [
-    "dotenv>=0.9.9",
-    "em>=0.4.0",
-    "fastapi>=0.116.1",
-    "lark>=1.2.2",
-    "loguru>=0.7.3",
-    "mcap>=1.3.0",
-    "mcap-ros2-support>=0.5.5",
-    "numpy<2",
-    "opencv-python-headless>=4.11.0.86",
-    "pipeline-configs",
     "pydantic>=2.11.7",
-    "pydantic-settings>=2.10.1",
     "pydantic-yaml>=1.5.1",
-    "python-statemachine[diagrams]>=3.0",
-    "pyyaml>=6.0.2",
-    "rclpy-intellisense>=1.2.0",
-    "requests>=2.32.4",
-    "uuid7-standard>=1.1.0",
-    "uvicorn[standard]>=0.35.0",
 ]
 
-[tool.uv.sources]
-pipeline-configs = { path = "../packages/pipeline-configs", editable = true }
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[dependency-groups]
-dev = [
-    "debugpy>=1.8.16",
-    "docker>=7.1.0",
-    "httpx>=0.28.1",
-    "mypy>=1.16.1",
-    "pytest>=8.4.1",
-    "pytest-cov>=6.2.1",
-    "ruff>=0.12.3",
-    "types-docker>=7.1.0.20250907",
-    "types-pyyaml>=6.0.12.20250516",
-    "types-requests>=2.32.4.20250611",
-]
+[tool.hatch.build.targets.wheel]
+packages = ["src/pipeline_configs"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
-namespace_packages = true # Use the correct namespace package options
-explicit_package_bases = true # Use the correct namespace package options
+namespace_packages = true
+explicit_package_bases = true
 mypy_path = ["src"]
-exclude = '''
-  ^(.venv|.mypy_cache|.ruff_cache|build|dist|__pycache__|node_modules)
-'''
-
-[tool.pytest.ini_options]
-minversion = "8.0"
-addopts = "--tb=long --showlocals --cov=src --cov-report=term-missing"
-pythonpath = ["src"]
-testpaths = ["tests"]
-python_files = "test_*.py"
-python_classes = "Test*"
-python_functions = "test_*"
 
 [tool.ruff]
 target-version = "py312"
@@ -98,7 +58,7 @@ exclude = [
     "build",
     "dist",
     "__pycache__",
-    "node_modules",
+    "src/inference_pb2.*",
 ]
 
 # Configure rule-specific settings
@@ -116,5 +76,7 @@ convention = "google"
     "D",       # No need for docstrings in tests
     "PLR2004", # Allow magic value comparison in tests
     "S101",    # Use asserts in tests
+    "ANN",     # No need for type annotations in tests
+    "PLC0415", # Allow local imports in tests
 ]
 "__init__.py" = ["F401"] # Allow unused imports in __init__.py files

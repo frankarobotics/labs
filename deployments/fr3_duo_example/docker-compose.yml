@@ -56,6 +56,7 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ${DATA_ROOT:-../../data}:/workspace/data
+      - ./config_station.yml:/workspace/config_station.yml
       - ./config_data_recorder.yml:/workspace/config_data_recorder.yml
       - ./cyclonedds.xml:/workspace/cyclonedds.xml:ro
     environment:

@@ -35,4 +35,6 @@ All configuration is loaded from `deployments/<station>/config_data_recorder.yml
 
 - `url`: FastAPI bind address (default `0.0.0.0:3002`).
 - `output_path`: Base directory for MCAP recordings (default `/workspace/data/raw_episodes`).
-- `ros_topics`: List of ROS 2 topics to record. An empty list records nothing.
+
+Recorded topics are **not** configurable here: they are derived from `config_station.yml`, which is the single source of
+truth for the station's topics. See [Deployment README](../../../deployments/README.md).

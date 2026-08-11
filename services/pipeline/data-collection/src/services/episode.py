@@ -13,8 +13,8 @@ from uuid import UUID
 
 import uuid7  # type: ignore[import-untyped]
 from loguru import logger
+from pipeline_configs.station import StationConfig
 
-from configs.station import StationConfig
 from configs.tasks import Task
 from models.episode import (
     DeviceInfo,

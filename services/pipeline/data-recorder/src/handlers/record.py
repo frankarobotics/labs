@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 
 from configs.data_recorder import DataRecorderConfig, load_data_recorder_config
+from configs.record_topics import load_record_topics
 from models.record import (
     DeleteRecordResponse,
     RecordStateResponse,
@@ -30,7 +31,11 @@ def get_record_service() -> RecordService:
         The record service singleton instance.
     """
     config: DataRecorderConfig = load_data_recorder_config()
-    return RecordService(config=config, record_metadata_repo=RecordMetadataRepo(config.output_path))
+    return RecordService(
+        config=config,
+        record_metadata_repo=RecordMetadataRepo(config.output_path),
+        ros_topics=load_record_topics(),
+    )
 
 
 @router.post("/api/v1/record/start", response_model=StartRecordResponse)

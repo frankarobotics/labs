@@ -1,3 +1,5 @@
+"""Station configuration model, shared across the pipeline services."""
+
 from __future__ import annotations
 
 from enum import Enum
@@ -64,6 +66,11 @@ class TeleopRobotConfig(BaseModel):
         ns = self.namespace.strip("/")
         return f"/{ns}/{topic}" if ns else f"/{topic}"
 
+    @property
+    def resolved_follower_topic(self) -> str:
+        """Absolute topic carrying this robot's follower (action) stream."""
+        return self.resolve_topic(self.follower_topic)
+
 
 class TeleopRobot(BaseModel):
     """Configuration for a teleoperation robot in the station (with config key)."""
@@ -79,45 +86,52 @@ class TeleopRobot(BaseModel):
         return TeleopRobotConfig.model_validate(v)
 
 
-class RealSenseCameraRGBConfig(BaseModel):
-    """Configuration for the RGB stream of a RealSense camera."""
-
-    topic: str
-
-
-class RealSenseCameraDepthConfig(BaseModel):
-    """Configuration for the Depth stream of a RealSense camera."""
-
-    topic: str
-
-
-class RealSenseCameraConfig(BaseModel):
-    """Configuration for a RealSense camera observer device (with optional rgb and depth)."""
+class ObserverConfig(BaseModel):
+    """Base for observer device configs."""
 
     model_config = ConfigDict(from_attributes=True)
 
-    rgb: RealSenseCameraRGBConfig | None = None
-    depth: RealSenseCameraDepthConfig | None = None
+    @property
+    def published_topics(self) -> list[str]:
+        """Every ROS topic this device publishes."""
+        raise NotImplementedError
 
 
-class ZedCameraRGBConfig(BaseModel):
-    """Configuration for the RGB stream of a ZED camera."""
+class CameraStreamConfig(BaseModel):
+    """One camera stream; the field name it is bound to carries the role (rgb, depth, info)."""
 
     topic: str
 
 
-class ZedCameraConfig(BaseModel):
+class CameraConfig(ObserverConfig):
+    """Base for camera observer configs, whose streams are optional named fields."""
+
+    @property
+    def published_topics(self) -> list[str]:
+        """Every ROS topic this device publishes derived from the declared fields."""
+        streams = (getattr(self, name) for name in type(self).model_fields)
+        return [stream.topic for stream in streams if isinstance(stream, CameraStreamConfig)]
+
+
+class RealSenseCameraConfig(CameraConfig):
+    """Configuration for a RealSense camera observer device (with optional rgb, depth and info)."""
+
+    rgb: CameraStreamConfig | None = None
+    depth: CameraStreamConfig | None = None
+    info: CameraStreamConfig | None = None
+
+
+class ZedCameraConfig(CameraConfig):
     """Configuration for a ZED camera observer device.
 
     Configure either ``rgb`` for a single rectified stream,
     or ``rgb_left`` and ``rgb_right`` for both stereo streams.
     """
 
-    model_config = ConfigDict(from_attributes=True)
-
-    rgb: ZedCameraRGBConfig | None = None
-    rgb_left: ZedCameraRGBConfig | None = None
-    rgb_right: ZedCameraRGBConfig | None = None
+    rgb: CameraStreamConfig | None = None
+    rgb_left: CameraStreamConfig | None = None
+    rgb_right: CameraStreamConfig | None = None
+    info: CameraStreamConfig | None = None
 
     @model_validator(mode="after")
     def check_stream_config(self) -> ZedCameraConfig:
@@ -131,12 +145,15 @@ class ZedCameraConfig(BaseModel):
         return self
 
 
-class RobotObserverConfig(BaseModel):
+class RobotObserverConfig(ObserverConfig):
     """Configuration for a robot observer device."""
 
-    model_config = ConfigDict(from_attributes=True)
-
     topics: list[str]
+
+    @property
+    def published_topics(self) -> list[str]:
+        """Every ROS topic this device publishes."""
+        return self.topics
 
 
 class ObserverDevice(BaseModel):
@@ -162,17 +179,44 @@ class ObserverDevice(BaseModel):
         raise ValueError(f"Unknown observer device type: {t}")
 
 
+class OtherTopicsConfig(BaseModel):
+    """Configuration for a plain list of ROS topics (config field)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    topics: list[str]
+
+
+class OtherTopics(BaseModel):
+    """Topics bound to no device: recorded as-is and never mapped into a dataset.
+
+    ``ROS_INFRA`` covers the ROS graph topics every station publishes, ``USER_TOPICS``
+    anything else a deployment wants in its recordings.
+    """
+
+    id: str
+    type: Literal["ROS_INFRA", "USER_TOPICS"]
+    config: OtherTopicsConfig
+
+    @field_validator("config", mode="before")
+    @classmethod
+    def validate_config(cls, v: dict[str, Any], info: ValidationInfo) -> OtherTopicsConfig:
+        """Validate and parse the config field for OtherTopics."""
+        return OtherTopicsConfig.model_validate(v)
+
+
 class Embodiment(BaseModel):
     """Configuration for the embodiment."""
 
     teleop_robots: list[TeleopRobot] | None = None
     observer_devices: list[ObserverDevice] | None = None
+    other_topics: list[OtherTopics] | None = None
 
-    def _validate_teleop_robot_ids(self) -> None:
-        """Validate that teleop robot IDs are unique and contain no '-' or whitespace."""
-        ids: list[str] = [robot.id for robot in self.teleop_robots or []]
+    @staticmethod
+    def _validate_ids(ids: list[str], section: str) -> None:
+        """Validate that IDs within a section are unique and contain no '-' or whitespace."""
         if len(ids) != len(set(ids)):
-            raise ValueError("All teleop_robots must have unique IDs.")
+            raise ValueError(f"All {section} must have unique IDs.")
         for id_ in ids:
             if "-" in id_ or " " in id_:
                 raise ValueError(f"Invalid ID '{id_}': IDs must not contain '-' or whitespace.")
@@ -193,16 +237,14 @@ class Embodiment(BaseModel):
     def model_post_init(self, __context: dict[str, Any] | None = None) -> None:
         """Post-initialization validation."""
         if self.teleop_robots:
-            self._validate_teleop_robot_ids()
+            self._validate_ids([robot.id for robot in self.teleop_robots], "teleop_robots")
             self._validate_teleop_robot_namespace_pairs()
 
         if self.observer_devices:
-            ids = [d.id for d in self.observer_devices]
-            if len(ids) != len(set(ids)):
-                raise ValueError("All observer_devices must have unique IDs.")
-            for id_ in ids:
-                if "-" in id_ or " " in id_:
-                    raise ValueError(f"Invalid ID '{id_}': IDs must not contain '-' or whitespace.")
+            self._validate_ids([device.id for device in self.observer_devices], "observer_devices")
+
+        if self.other_topics:
+            self._validate_ids([entry.id for entry in self.other_topics], "other_topics")
 
 
 class StationConfig(BaseModel):

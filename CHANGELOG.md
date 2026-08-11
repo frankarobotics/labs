@@ -60,6 +60,24 @@
 - The `example_station` deployment got renamed to `fr3_duo_example`. Users who edited this deployment might need to
   stash their changes before pulling and then re-apply them.
 - Services can now be started offline after a prior online build
+- Refactor config loaders (CORS and station) in a common library shared by multiple services
+- **Breaking Change:** `config_station.yml` is now the single source of truth for the recorded ROS 2 topics.
+
+  **Upgrade steps:**
+  1. Remove `ros_topics` from `config_data_recorder.yml` — the data-recorder now rejects the key at startup.
+  2. In `config_station.yml`, declare each camera's calibration stream as an `info.topic` next to its image streams
+     (previously the recorder appended `camera_info` implicitly).
+  3. In `config_station.yml`, add the ROS graph topics under the new `embodiment.other_topics` section as a `ROS_INFRA`
+     entry (previously hard-coded in the recorder), and any extra topics you record as `USER_TOPICS` entries. See the
+     [Deployment README](deployments/README.md#recorded-topics) and `deployments/fr3_duo_example/config_station.yml`.
+
+- **Breaking Change:** Add a `packages` folder to `services` for shared libraries, and move the station and CORS config
+  loaders there.
+
+  **Upgrade steps:**
+  1. Copy `packages_context_custom_build` of the example station's `Tiltfile` to your deployment's `Tiltfile`.
+  2. Use this function for the packages that need access to the station and CORS config loaders, e.g.: data-collection
+     and data-recorder. See the example station's `Tiltfile` for usage examples.
 
 ## [0.1.1] - 2026-06-01
 

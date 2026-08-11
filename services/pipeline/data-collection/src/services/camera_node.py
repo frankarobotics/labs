@@ -4,12 +4,11 @@ import cv2
 import numpy as np
 from cv_bridge import CvBridge  # type: ignore
 from loguru import logger
+from pipeline_configs.station import Noop
 from rclpy.node import Node
 from rclpy.subscription import Subscription
 from rclpy.timer import Timer
 from sensor_msgs.msg import CompressedImage, Image  # type: ignore
-
-from configs.station import Noop
 
 
 class CameraNode(Node):

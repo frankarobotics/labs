@@ -16,6 +16,7 @@ dependencies = [
     "mcap>=1.3.0",
     "numpy>=2.2.6",
     "opencv-python-headless>=4.11.0.86",
+    "pipeline-configs",
     "pydantic-settings>=2.10.1",
     "pydantic-yaml>=1.5.1",
     "pydantic>=2.11.7",
@@ -25,6 +26,9 @@ dependencies = [
     "uuid7-standard>=1.1.0",
     "uvicorn>=0.35.0",
 ]
+
+[tool.uv.sources]
+pipeline-configs = { path = "../packages/pipeline-configs", editable = true }
 
 [dependency-groups]
 dev = [

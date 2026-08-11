@@ -8,10 +8,10 @@ import rclpy  # type: ignore
 import rclpy.client  # type: ignore
 import rclpy.subscription  # type: ignore
 from loguru import logger
+from pipeline_configs.station import StationConfig
 from std_msgs.msg import String  # type: ignore
 from std_srvs.srv import Trigger  # type: ignore
 
-from configs.station import StationConfig
 from services.robot import BaseRobotService
 
 

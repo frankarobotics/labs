@@ -7,10 +7,10 @@ from functools import lru_cache
 from fastapi import Depends
 from fastapi.security import HTTPBearer
 from loguru import logger
+from pipeline_configs.station import StationConfig, load_station_config
 
 from configs.data_collection import DataCollectionConfig, load_data_collection_config
 from configs.data_recorder import DataRecorderConfig, load_data_recorder_config
-from configs.station import StationConfig, load_station_config
 from configs.tasks import TasksConfig, load_tasks_config
 from repos.data_recorder import DataRecorderRepo
 from repos.devices import DeviceRepo

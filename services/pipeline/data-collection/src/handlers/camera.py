@@ -5,8 +5,14 @@ This module provides endpoints for camera streaming and management.
 
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from loguru import logger
+from pipeline_configs.station import (
+    ObserverDevice,
+    RealSenseCameraConfig,
+    StationConfig,
+    ZedCameraConfig,
+    load_station_config,
+)
 
-from configs.station import ObserverDevice, RealSenseCameraConfig, StationConfig, ZedCameraConfig, load_station_config
 from services.camera import CameraService
 
 router = APIRouter()

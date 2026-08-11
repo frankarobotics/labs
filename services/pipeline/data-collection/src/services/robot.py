@@ -7,8 +7,7 @@ import rclpy  # type: ignore
 import rclpy.executors  # type: ignore
 import rclpy.node  # type: ignore
 from loguru import logger
-
-from configs.station import StationConfig
+from pipeline_configs.station import StationConfig
 
 
 class BaseRobotService:
