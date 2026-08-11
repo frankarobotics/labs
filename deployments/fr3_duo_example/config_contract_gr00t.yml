@@ -1,0 +1,121 @@
+# GR00T I/O contract: the ordered camera/state/action wiring between station topics and the
+# policy's named arrays.
+# List order is significant: it is the concat order of the flat state/action vectors. Every topic
+# must exist in config_station.yml.
+
+version: 1
+
+# Anchors only; loaders ignore top-level keys starting with "_"
+_definitions:
+  fr3_joints: &fr3_joints
+    - fr3_joint1
+    - fr3_joint2
+    - fr3_joint3
+    - fr3_joint4
+    - fr3_joint5
+    - fr3_joint6
+    - fr3_joint7
+  # driving knuckle of the 2F-85, same name on both grippers (robotiq_controllers.yaml)
+  robotiq_joints: &robotiq_joints
+    - robotiq_85_left_knuckle_joint
+
+policy:
+  # Rate the policy is trained at: the inference loop period and dataset-builder's resampling
+  # target. Sole owner of this value - config_inference.yml must not also declare control_hz
+  control_rate_hz: 20
+  # dtype of every state/action segment, and of the generated LeRobot features
+  dtype: float32
+
+# note for dataset-builder: topic is the live image topic; processed episodes carry data-processor's
+# re-encoded .../compressed_video, which dataset-builder derives from topic itself
+cameras:
+  - policy_key: head
+    topic: /head_camera/zed_node/rgb/image_rect_color
+    shape: [720, 1280, 3]
+    resize: false
+  - policy_key: wrist_left
+    topic: /wrist_camera_left/camera/color/image_raw
+    shape: [480, 640, 3]
+    resize: false
+  - policy_key: wrist_right
+    topic: /wrist_camera_right/camera/color/image_raw
+    shape: [480, 640, 3]
+    resize: false
+
+state:
+  - policy_key: left_arm_position
+    topic: /left/franka_robot_state_broadcaster/measured_joint_states
+    message_type: sensor_msgs/JointState
+    field: position
+    element_names: *fr3_joints
+  - policy_key: left_arm_velocity
+    topic: /left/franka_robot_state_broadcaster/measured_joint_states
+    message_type: sensor_msgs/JointState
+    field: velocity
+    element_names: *fr3_joints
+  - policy_key: left_gripper_position
+    topic: /left/follower/gripper/joint_states
+    message_type: sensor_msgs/JointState
+    field: position
+    element_names: *robotiq_joints
+  - policy_key: left_arm_external_joint_torque
+    topic: /left/franka_robot_state_broadcaster/external_joint_torques
+    message_type: sensor_msgs/JointState
+    field: effort
+    element_names: *fr3_joints
+  - policy_key: left_arm_external_wrench
+    topic: /left/franka_robot_state_broadcaster/external_wrench_in_stiffness_frame
+    message_type: geometry_msgs/WrenchStamped
+    element_names: [force.x, force.y, force.z, torque.x, torque.y, torque.z]
+  - policy_key: right_arm_position
+    topic: /right/franka_robot_state_broadcaster/measured_joint_states
+    message_type: sensor_msgs/JointState
+    field: position
+    element_names: *fr3_joints
+  - policy_key: right_arm_velocity
+    topic: /right/franka_robot_state_broadcaster/measured_joint_states
+    message_type: sensor_msgs/JointState
+    field: velocity
+    element_names: *fr3_joints
+  - policy_key: right_gripper_position
+    topic: /right/follower/gripper/joint_states
+    message_type: sensor_msgs/JointState
+    field: position
+    element_names: *robotiq_joints
+  - policy_key: right_arm_external_joint_torque
+    topic: /right/franka_robot_state_broadcaster/external_joint_torques
+    message_type: sensor_msgs/JointState
+    field: effort
+    element_names: *fr3_joints
+  - policy_key: right_arm_external_wrench
+    topic: /right/franka_robot_state_broadcaster/external_wrench_in_stiffness_frame
+    message_type: geometry_msgs/WrenchStamped
+    element_names: [force.x, force.y, force.z, torque.x, torque.y, torque.z]
+
+# Follower topics the controller-coordinator follows
+action:
+  - policy_key: left_arm_position
+    topic: /left/follower/gello/joint_states
+    message_type: sensor_msgs/JointState
+    field: position
+    element_names: *fr3_joints
+  - policy_key: left_gripper_position
+    topic: /left/follower/gripper/gripper_client/target_gripper_width_percent
+    # how wide open, 0..1 (0 closed, 1 open) - state's left_gripper_position has a different
+    # unit: a finger-hinge angle in rad that grows as this value shrinks
+    message_type: std_msgs/Float32
+  - policy_key: right_arm_position
+    topic: /right/follower/gello/joint_states
+    message_type: sensor_msgs/JointState
+    field: position
+    element_names: *fr3_joints
+  - policy_key: right_gripper_position
+    topic: /right/follower/gripper/gripper_client/target_gripper_width_percent
+    message_type: std_msgs/Float32
+
+# dataset-builder only: non-topic columns the generated modality.json declares.
+# original_key copies an existing parquet column
+annotations:
+  - policy_key: human.action.task_description
+    original_key: task_index
+  - policy_key: human.validity

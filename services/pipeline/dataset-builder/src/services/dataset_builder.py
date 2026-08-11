@@ -21,11 +21,10 @@ class DatasetBuildRequest:
     mcap_files: tuple[Path, ...]
     output_dir: Path
     target_format: str
-    target_fps: float
     dataset_name: str
-    station_config_path: Path | None = None
-    recorder_config_path: Path | None = None
-    modality_config_path: Path | None = None
+    policy_contract_path: Path
+    policy_type: str
+    target_fps: float | None = None
 
 
 def _load_lerobot_builder() -> DatasetBuilder:
@@ -58,9 +57,8 @@ def build_dataset(request: DatasetBuildRequest) -> dict[str, Any]:
     return builder(
         mcap_files=request.mcap_files,
         output_dir=request.output_dir,
-        target_fps=request.target_fps,
+        policy_contract_path=request.policy_contract_path,
         dataset_name=request.dataset_name,
-        station_config_path=request.station_config_path,
-        recorder_config_path=request.recorder_config_path,
-        modality_config_path=request.modality_config_path,
+        policy_type=request.policy_type,
+        target_fps=request.target_fps,
     )

@@ -1,7 +1,7 @@
 [project]
 name = "pipeline-configs"
 version = "0.1.0"
-description = "Shared config models for the pipeline services (station, ...)."
+description = "Shared config models for the pipeline services (station, policy contract, ...)."
 license = "Apache-2.0"
 requires-python = ">=3.12"
 dependencies = [
@@ -9,9 +9,25 @@ dependencies = [
     "pydantic-yaml>=1.5.1",
 ]
 
+[dependency-groups]
+dev = [
+    "mypy>=1.17.1",
+    "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
+    "pyyaml>=6.0.2",
+    "ruff>=0.12.9",
+    "types-PyYAML>=6.0.12",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "--tb=long --cov=src --cov-report=term-missing"
+pythonpath = ["src"]
+testpaths = ["tests"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pipeline_configs"]

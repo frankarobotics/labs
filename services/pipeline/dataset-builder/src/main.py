@@ -2,6 +2,7 @@
 """CLI entry point for dataset building from MCAP files."""
 
 import argparse
+import shutil
 import sys
 from datetime import date
 from pathlib import Path
@@ -9,6 +10,7 @@ from typing import Any
 from uuid import UUID
 
 from loguru import logger
+from pipeline_configs import POLICY_CONTRACT_FILE
 
 from services.dataset_builder import (
     DatasetBuildRequest,
@@ -43,7 +45,7 @@ def _date_type(value: str) -> date:
         raise argparse.ArgumentTypeError(f"Invalid date '{value}' (expected YYYY-MM-DD)") from exc
 
 
-def parse_args() -> argparse.Namespace:  # noqa: C901
+def parse_args() -> argparse.Namespace:
     """Parse CLI arguments."""
     supported_formats = list_supported_formats()
     parser = argparse.ArgumentParser(
@@ -80,7 +82,11 @@ def parse_args() -> argparse.Namespace:  # noqa: C901
         type=Path,
         help="Output directory for the built dataset (default: /workspace/data/datasets/lerobot/<dataset-name>)",
     )
-    parser.add_argument("--fps", type=float, default=20.0, help="Target frame rate for synchronization (default: 20.0)")
+    parser.add_argument(
+        "--fps",
+        type=float,
+        help="Override the output FPS (recommended default: contract's policy.control_rate_hz)",
+    )
     parser.add_argument(
         "--dataset-name",
         required=True,
@@ -89,24 +95,19 @@ def parse_args() -> argparse.Namespace:  # noqa: C901
     parser.add_argument(
         "--deployment-dir",
         type=Path,
-        help="Path to a deployment directory (e.g. deployments/fr3_duo_example). "
-        "Automatically resolves config_station.yml, config_data_recorder.yml, and modality.json from that folder "
-        "unless --station-config / --recorder-config / --modality-config are given explicitly.",
+        help="Path to a deployment directory (e.g. deployments/fr3_duo_example)",
     )
     parser.add_argument(
-        "--station-config",
-        type=Path,
-        help="Path to config_station.yml used to classify observation and action topics",
+        "--policy-type",
+        default="gr00t",
+        help="Policy model the contract targets; selects config_contract_<policy-type>.yml "
+        "when --policy-contract is not set explicitly (default: gr00t)",
     )
     parser.add_argument(
-        "--recorder-config",
+        "--policy-contract",
         type=Path,
-        help="Path to config_data_recorder.yml used to validate recorded topics",
-    )
-    parser.add_argument(
-        "--modality-config",
-        type=Path,
-        help="Path to modality.json defining observation.state structure and annotation features",
+        help="Path to the policy contract YAML file, which declares the cameras, state and action segments to "
+        f"extract (default: <deployment-dir>/config_contract_<policy-type>.yml, else {POLICY_CONTRACT_FILE})",
     )
 
     input_group = parser.add_argument_group("explicit input (mutually exclusive with discovery filters)")
@@ -189,20 +190,12 @@ def parse_args() -> argparse.Namespace:  # noqa: C901
     if args.output is None:
         args.output = Path("/workspace/data/datasets/lerobot") / args.dataset_name
 
-    # Resolve config paths from --deployment-dir when not provided explicitly
-    if args.deployment_dir is not None:
-        if args.station_config is None:
-            candidate = args.deployment_dir / "config_station.yml"
-            if candidate.exists():
-                args.station_config = candidate
-        if args.recorder_config is None:
-            candidate = args.deployment_dir / "config_data_recorder.yml"
-            if candidate.exists():
-                args.recorder_config = candidate
-        if args.modality_config is None:
-            candidate = args.deployment_dir / "modality.json"
-            if candidate.exists():
-                args.modality_config = candidate
+    if args.policy_contract is None:
+        args.policy_contract = (
+            args.deployment_dir / f"config_contract_{args.policy_type}.yml"
+            if args.deployment_dir is not None
+            else POLICY_CONTRACT_FILE
+        )
 
     return args
 
@@ -261,11 +254,10 @@ def run_build(args: argparse.Namespace) -> None:
         mcap_files=mcap_files,
         output_dir=args.output,
         target_format=args.format,
-        target_fps=args.fps,
         dataset_name=args.dataset_name,
-        station_config_path=args.station_config,
-        recorder_config_path=args.recorder_config,
-        modality_config_path=args.modality_config,
+        policy_contract_path=args.policy_contract,
+        policy_type=args.policy_type,
+        target_fps=args.fps,
     )
 
     if request.output_dir.exists() and any(request.output_dir.iterdir()):
@@ -275,7 +267,16 @@ def run_build(args: argparse.Namespace) -> None:
         )
     request.output_dir.mkdir(parents=True, exist_ok=True)
 
-    result: dict[str, Any] = build_dataset(request)
+    try:
+        result: dict[str, Any] = build_dataset(request)
+    except Exception:
+        try:
+            shutil.rmtree(request.output_dir)
+            logger.info(f"Removed partial dataset at {request.output_dir} due to failure during dataset creation")
+        except OSError as cleanup_error:
+            logger.error(f"Failed to remove partial dataset at {request.output_dir}: {cleanup_error}")
+        raise
+
     episode_metadata = result["episode_metadata"]
     metadata_files = result["metadata_files"]
 

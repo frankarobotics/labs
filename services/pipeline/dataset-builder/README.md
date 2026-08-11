@@ -90,14 +90,24 @@ Use `--dry-run` to preview the matched episodes without converting.
 
 `--input` provides explicit MCAP path(s) and is **mutually exclusive** with discovery filters.
 
-### Topic manifest
+### Policy contract
 
-When `--deployment-dir` (or explicit config flags) is provided, the builder loads a `DatasetTopicManifest` from
-`config_station.yml` and `config_data_recorder.yml`. The manifest classifies every topic as `image`, `state`, `action`,
-or `ignored`, enforces the ordering defined in the station config, and filters out topics that were not actually
-recorded.
+A policy contract is the **required** input that defines what a dataset contains and `meta/modality.json` is generated
+from this contract. Every contract member the builder consumes:
 
-Without a manifest, the reader falls back to schema-name heuristics, which is not recommended for production datasets.
+| Contract                     | Effect on the dataset                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------- |
+| `policy.control_rate_hz`     | Resampling target (`--fps` overrides it)                                        |
+| `policy.dtype`               | dtype of every state/action column and feature                                  |
+| `cameras[].topic`            | Live image topic; the `.../compressed_video` stream to read is derived from it  |
+| `cameras[].policy_key`       | `observation.images.<policy_key>` feature and video directory                   |
+| `state[]` / `action[]` order | Concatenation order of `observation.state` and `action`                         |
+| `state[].policy_key`         | `observation.state.<policy_key>` column, and its span in `meta/modality.json`   |
+| `state[].field`              | Which JointState array is read (`position` / `velocity` / `effort`)             |
+| `state[].element_names`      | Elements a segment contributes, reordered against the message's own `name` list |
+| `annotations[]`              | `annotation.<policy_key>` columns in the Parquet and `meta/modality.json`       |
+
+An episode that does not contain data for every declared segment is rejected.
 
 ## CLI Reference
 
@@ -106,9 +116,8 @@ usage: main.py [-h] [--verbose] [--format {lerobot}]
                --dataset-name DATASET_NAME [--output OUTPUT]
                [--fps FPS]
                [--deployment-dir DEPLOYMENT_DIR]
-               [--station-config STATION_CONFIG]
-               [--recorder-config RECORDER_CONFIG]
-               [--modality-config MODALITY_CONFIG]
+               [--policy-type POLICY_TYPE]
+               [--policy-contract POLICY_CONTRACT]
                [--input INPUT]
                [--episodes-dir EPISODES_DIR]
                [--from YYYY-MM-DD] [--to YYYY-MM-DD]
@@ -119,26 +128,25 @@ usage: main.py [-h] [--verbose] [--format {lerobot}]
 
 ## Key flags
 
-| Flag                | Default                                           | Description                                                                                  |
-| ------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `--dataset-name`    | _(required)_                                      | Dataset name                                                                                 |
-| `--output`          | `/workspace/data/datasets/lerobot/<dataset-name>` | Output directory (derived from `--dataset-name` when omitted)                                |
-| `--format`          | `lerobot`                                         | Target dataset format                                                                        |
-| `--fps`             | `20.0`                                            | Target frame rate for synchronization                                                        |
-| `--deployment-dir`  | `/workspace/deployments/fr3_duo_example`          | Resolves `config_station.yml`, `config_data_recorder.yml`, and `modality.json` automatically |
-| `--station-config`  | `<deployment-dir>/config_station.yml`             | Override station config path                                                                 |
-| `--recorder-config` | `<deployment-dir>/config_data_recorder.yml`       | Override recorder config path                                                                |
-| `--modality-config` | `<deployment-dir>/modality.json`                  | Override modality.json path                                                                  |
-| `--input`           | —                                                 | Explicit MCAP path (repeatable, mutually exclusive with filters)                             |
-| `--episodes-dir`    | `/workspace/data/processed_episodes`              | Root of the processed episodes tree                                                          |
-| `--from`            | —                                                 | Include episodes on or after this date (inclusive)                                           |
-| `--to`              | —                                                 | Include episodes on or before this date (inclusive)                                          |
-| `--task`            | —                                                 | Substring match on task description (repeatable)                                             |
-| `--episode-id`      | —                                                 | Include specific episode UUID (repeatable)                                                   |
-| `--exclude-id`      | —                                                 | Exclude specific episode UUID (repeatable)                                                   |
-| `--limit`           | —                                                 | Max episodes to include                                                                      |
-| `--include-failed`  | —                                                 | Include failed episodes                                                                      |
-| `--dry-run`         | —                                                 | Preview matched episodes without converting                                                  |
+| Flag                | Default                                           | Description                                                      |
+| ------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
+| `--dataset-name`    | _(required)_                                      | Dataset name                                                     |
+| `--output`          | `/workspace/data/datasets/lerobot/<dataset-name>` | Output directory (derived from `--dataset-name` when omitted)    |
+| `--format`          | `lerobot`                                         | Target dataset format                                            |
+| `--fps`             | contract's `policy.control_rate_hz`               | Override the resampling target                                   |
+| `--deployment-dir`  | `/workspace/deployments/fr3_duo_example`          | Resolves policy contract path automatically                      |
+| `--policy-type`     | `gr00t`                                           | Policy model the contract targets                                |
+| `--policy-contract` | `<deployment-dir>/config_contract_<policy-type>.yml` | Override the policy contract path (required input)            |
+| `--input`           | —                                                 | Explicit MCAP path (repeatable, mutually exclusive with filters) |
+| `--episodes-dir`    | `/workspace/data/processed_episodes`              | Root of the processed episodes tree                              |
+| `--from`            | —                                                 | Include episodes on or after this date (inclusive)               |
+| `--to`              | —                                                 | Include episodes on or before this date (inclusive)              |
+| `--task`            | —                                                 | Substring match on task description (repeatable)                 |
+| `--episode-id`      | —                                                 | Include specific episode UUID (repeatable)                       |
+| `--exclude-id`      | —                                                 | Exclude specific episode UUID (repeatable)                       |
+| `--limit`           | —                                                 | Max episodes to include                                          |
+| `--include-failed`  | —                                                 | Include failed episodes                                          |
+| `--dry-run`         | —                                                 | Preview matched episodes without converting                      |
 
 ## Task reference
 

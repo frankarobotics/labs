@@ -36,6 +36,9 @@ WORKDIR /workspace
 
 ENV PYTHONPATH="/opt/ros/jazzy/lib/python3.12/site-packages:/workspace/src"
 
+# target /packages so the pyproject path source "../packages/pipeline-configs" resolves from /workspace
+COPY --from=packages pipeline-configs /packages/pipeline-configs
+
 COPY pyproject.toml pyproject.toml
 COPY uv.lock uv.lock
 
@@ -81,6 +84,9 @@ WORKDIR /workspace
 
 ENV PYTHONPATH="/opt/ros/jazzy/lib/python3.12/site-packages:/workspace/src"
 ENV UV_COMPILE_BYTECODE=1
+
+# target /packages so the pyproject path source "../packages/pipeline-configs" resolves from /workspace
+COPY --from=packages pipeline-configs /packages/pipeline-configs
 
 COPY uv.lock uv.lock
 COPY pyproject.toml pyproject.toml

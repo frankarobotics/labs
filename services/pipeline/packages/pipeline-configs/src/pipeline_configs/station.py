@@ -2,25 +2,18 @@
 
 from __future__ import annotations
 
-from enum import Enum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationInfo, field_validator, model_validator
 from pydantic_yaml import parse_yaml_file_as
+
+from pipeline_configs.ros_messages import ROSMessageType
 
 
 class Metadata(BaseModel):
     """Metadata for the station configuration."""
 
     station_id: str
-
-
-class ROSMessageType(Enum):
-    """Enumeration of supported message types."""
-
-    TWIST_STAMPED = "geometry_msgs/Twist Message"
-    JOINT_STATE = "sensor_msgs/JointState"
-    FLOAT32 = "std_msgs/Float32"
 
 
 class Identity(BaseModel):
@@ -234,7 +227,7 @@ class Embodiment(BaseModel):
                 )
             namespace_actuator_pairs[pair] = robot.id
 
-    def model_post_init(self, __context: dict[str, Any] | None = None) -> None:
+    def model_post_init(self, context: dict[str, Any] | None = None, /) -> None:
         """Post-initialization validation."""
         if self.teleop_robots:
             self._validate_ids([robot.id for robot in self.teleop_robots], "teleop_robots")

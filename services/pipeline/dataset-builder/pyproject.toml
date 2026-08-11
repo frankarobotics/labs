@@ -7,7 +7,6 @@ license = "Apache-2.0"
 requires-python = ">=3.12"
 dependencies = [
     "ffmpeg-python>=0.2.0",
-    "foxglove-sdk>=0.14.1",
     "loguru>=0.7.3",
     "mcap-protobuf-support>=0.5.0",
     "mcap-ros2-support>=0.5.0",
@@ -15,11 +14,15 @@ dependencies = [
     "numpy>=2.3.3",
     "opencv-python>=4.11.0.86",
     "pandas>=2.3.2",
+    "pipeline-configs",
     "pyarrow>=18.0.0",
     "pydantic>=2.11.8",
     "pyyaml>=6.0.2",
     "scipy>=1.16.2",
 ]
+
+[tool.uv.sources]
+pipeline-configs = { path = "../packages/pipeline-configs", editable = true }
 
 [dependency-groups]
 dev = [

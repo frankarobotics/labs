@@ -56,21 +56,21 @@ class TemporalSynchronizer:
         logger.info("Starting temporal synchronization...")
 
         start_time_ns = self._get_start_time_ns(
-            extracted_data.video_topics, extracted_data.robot_state_topics, extracted_data.action_topics
+            extracted_data.video_stats, extracted_data.state_stats, extracted_data.action_stats
         )
 
         first_message_time_ns = self._get_first_message_time_ns(
-            extracted_data.video_topics, extracted_data.robot_state_topics, extracted_data.action_topics
+            extracted_data.video_stats, extracted_data.state_stats, extracted_data.action_stats
         )
 
         self._check_start_time(start_time_ns, first_message_time_ns)
 
         end_time_ns = self._get_end_time_ns(
-            extracted_data.video_topics, extracted_data.robot_state_topics, extracted_data.action_topics
+            extracted_data.video_stats, extracted_data.state_stats, extracted_data.action_stats
         )
 
         last_message_time_ns = self._get_last_message_time_ns(
-            extracted_data.video_topics, extracted_data.robot_state_topics, extracted_data.action_topics
+            extracted_data.video_stats, extracted_data.state_stats, extracted_data.action_stats
         )
 
         self._check_end_time(end_time_ns, last_message_time_ns)
