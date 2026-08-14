@@ -7,10 +7,11 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
+from pipeline_configs.cors import CORSConfig, load_cors_config
 
-from configs.cors import CORSConfig, load_cors_config
 from configs.data_recorder import DataRecorderConfig, load_data_recorder_config
 from configs.logger import LoggerConfig, load_logger_config
+from configs.record_topics import load_record_topics
 from handlers import record
 from helpers.logging import setup_logging
 from middleware.interceptors import init_error_handlers
@@ -32,13 +33,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     # Load configuration
     config: DataRecorderConfig = load_data_recorder_config()
+    ros_topics: list[str] = load_record_topics()
+    logger.info(f"Recording {len(ros_topics)} topics derived from config_station.yml")
 
     # Create metadata repository
     metadata_repo = RecordMetadataRepo(base_path=config.output_path)
 
     # Initialize RecordService as a singleton
     logger.info("Initializing RecordService as a singleton")
-    RecordService(config, metadata_repo)
+    RecordService(config, metadata_repo, ros_topics)
 
     yield
 

@@ -1,12 +1,11 @@
 from geometry_msgs.msg import TwistStamped  # type: ignore
 from loguru import logger
+from pipeline_configs.station import Identity, Noop, ROSMessageType
 from rclpy.node import Node
 from rclpy.publisher import Publisher
 from rclpy.subscription import Subscription
 from sensor_msgs.msg import JointState  # type: ignore
 from std_msgs.msg import Float32  # type: ignore
-
-from configs.station import Identity, Noop, ROSMessageType
 
 
 class TeleopRobotNode(Node):

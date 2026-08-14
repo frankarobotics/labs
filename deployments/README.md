@@ -14,10 +14,10 @@ Each deployment folder contains:
 
 | File                         | Description                                                           |
 | ---------------------------- | --------------------------------------------------------------------- |
-| `config_station.yml`         | Station ID and dual-arm teleoperation mapping                         |
+| `config_station.yml`         | Station ID, dual-arm teleoperation mapping and every recorded ROS 2 topic |
 | `config_tasks.yml`           | Task definitions available for data collection episodes               |
 | `config_data_collection.yml` | data-collection service settings and data-recorder client connection, see also [Data Collection README](../services/pipeline/data-collection/README.md). |
-| `config_data_recorder.yml`   | data-recorder service settings and ROS 2 topics to record, see also [Data Recorder README](../services/pipeline/data-recorder/README.md). |
+| `config_data_recorder.yml`   | data-recorder service settings, see also [Data Recorder README](../services/pipeline/data-recorder/README.md). |
 | `config_data_processor.yml`  | data-processor service settings and data-collection client connection, see also [Data Processor README](../services/pipeline/data-processor/README.md). |
 
 ### Hardware
@@ -149,7 +149,45 @@ Topics under `embodiment.teleop_robots` are **namespace-relative** — the `name
 ```
 
 Topics starting with `/` are treated as absolute and used as-is.
-Topics under `observer_devices` are always absolute.
+Topics under `observer_devices` and `other_topics` are always absolute.
+
+### Recorded Topics
+
+`config_station.yml` is the single source of truth for what the data-recorder records. It is derived from the embodiment as follows:
+
+| Section            | Recorded topics                                                                  |
+| ------------------ | -------------------------------------------------------------------------------- |
+| `teleop_robots`    | `follower_topic` only — leaders are inputs, not observations                     |
+| `observer_devices` | every configured camera stream and every `ROBOT_OBSERVER` topic                  |
+| `other_topics`     | every topic of every entry, verbatim                                             |
+
+Cameras declare their calibration stream under `info`, next to the image streams:
+
+```yaml
+- id: wrist_left
+  type: REALSENSE_CAMERA
+  config:
+    rgb:
+      topic: /wrist_camera_left/camera/color/image_raw
+    info:
+      topic: /wrist_camera_left/camera/color/camera_info
+```
+
+`embodiment.other_topics` holds topics that belong to no device and carry no dataset role — `ROS_INFRA` for the ROS graph
+topics every station publishes, `USER_TOPICS` for anything else you want in the recordings:
+
+```yaml
+other_topics:
+  - id: ros_infra
+    type: ROS_INFRA
+    config:
+      topics: [/parameter_events, /rosout, /tf, /tf_static]
+
+  - id: force_torque
+    type: USER_TOPICS
+    config:
+      topics: [/left/ft_sensor/wrench]
+```
 
 ### Cross-Service URL Dependencies
 
@@ -196,8 +234,7 @@ If you have multiple stations or your station varies from the default setup with
    - Configure `embodiment.observer_devices` to match your cameras/sensors
 
 3. **Update `config_data_recorder.yml`**:
-   - List all ROS 2 topics you want to record from your devices
-   - Ensure topic names match the namespaces in `config_station.yml`
+   - Adjust the service URL and output path — recorded topics come from `config_station.yml`
 
 4. **Update device-specific configs**:
    - Edit `config_franka_robot.yml`, `config_gello.yml`, etc. to match your hardware

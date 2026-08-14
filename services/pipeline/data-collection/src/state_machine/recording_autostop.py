@@ -1,8 +1,11 @@
 """Bridge listener that stops an active recording when the workflow leaves FOLLOWING."""
 
 from __future__ import annotations
+
 from concurrent.futures import ThreadPoolExecutor
+
 from loguru import logger
+
 from state_machine.recording import RecordingStateMachine
 
 

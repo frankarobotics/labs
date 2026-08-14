@@ -42,7 +42,9 @@ class RecordService:
 
     _instance: RecordService | None = None
 
-    def __new__(cls, config: DataRecorderConfig, record_metadata_repo: RecordMetadataRepo) -> RecordService:
+    def __new__(
+        cls, config: DataRecorderConfig, record_metadata_repo: RecordMetadataRepo, ros_topics: list[str]
+    ) -> RecordService:
         """Create or return the singleton instance."""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -62,16 +64,19 @@ class RecordService:
                 delattr(cls._instance, "_initialized")
         cls._instance = None
 
-    def __init__(self, config: DataRecorderConfig, record_metadata_repo: RecordMetadataRepo) -> None:
+    def __init__(
+        self, config: DataRecorderConfig, record_metadata_repo: RecordMetadataRepo, ros_topics: list[str]
+    ) -> None:
         """Initialize the record service.
 
         Args:
             config: Configuration for the data recorder.
             record_metadata_repo: Repository for record metadata operations.
+            ros_topics: Topics to record, derived from the station config.
 
         Note:
             This constructor should not be called directly.
-            Use the singleton pattern by calling RecordService(config, repo).
+            Use the singleton pattern by calling RecordService(config, repo, topics).
         """
         # Only initialize once
         if hasattr(self, "_initialized"):
@@ -82,6 +87,7 @@ class RecordService:
         self.episode_id: UUID | None = None
         self.recording_process: subprocess.Popen[bytes] | None = None
         self.config: DataRecorderConfig = config
+        self.ros_topics: list[str] = ros_topics
         self.output_path = Path(self.config.output_path)
         self.record_metadata_repo: RecordMetadataRepo = record_metadata_repo
         self.lock = Lock()  # Lock for thread safety across concurrent API requests
@@ -304,8 +310,8 @@ class RecordService:
                 return StartRecordResponse(status="error", message="Recording already in progress")
 
             # Validate ROS topics are configured
-            if not self.config.ros_topics:
-                error_msg: str = "No ROS topics configured for recording. Check your configuration."
+            if not self.ros_topics:
+                error_msg: str = "No ROS topics derived from config_station.yml. Check your configuration."
                 logger.error(error_msg)
                 return StartRecordResponse(status="error", message=error_msg)
 
@@ -317,7 +323,7 @@ class RecordService:
                 now: datetime = datetime.now(timezone.utc)
                 metadata = RecordMetadata(
                     episode_id=episode_id,
-                    topics=self.config.ros_topics,
+                    topics=self.ros_topics,
                     format="mcap",
                     serialization_format="cdr",
                     recording_software="rosbag2_py",
@@ -328,7 +334,7 @@ class RecordService:
 
                 # Start the recording process
                 self.recording_process = self._start_ros2_recording(
-                    episode_id=episode_id, output_path=self.output_path, topics=self.config.ros_topics
+                    episode_id=episode_id, output_path=self.output_path, topics=self.ros_topics
                 )
 
                 # Give the process a moment to start and check if it's still running

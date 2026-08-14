@@ -144,7 +144,7 @@ def _apply_path_filters(
 
     dropped = len(episodes) - len(result)
     if dropped:
-        logger.info(f"Filters excluded {dropped} episode(s), {len(result)} remaining")
+        logger.info(f"Path and date filters excluded {dropped} episode(s), {len(result)} remaining")
 
     return result
 

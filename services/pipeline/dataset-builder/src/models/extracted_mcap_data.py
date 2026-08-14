@@ -10,25 +10,25 @@ from models.topic_statistics import TopicStatistics
 
 
 class ExtractedMcapData(BaseModel):
-    """Represents extracted MCAP data including videos, robot states, actions, metadata, and summary.
+    """Data extracted from one MCAP episode, keyed by the policy_key each contract segment owns.
 
     Attributes:
-        compressed_videos (dict[str, CompressedVideoInfo]): Mapping of video topics to compressed video info.
-        video_topics (dict[str, TopicStatistics]): Mapping of video topics to their statistics.
-        robot_states (dict[str, list[RobotState]]): Mapping of robot state topics to lists of robot states.
-        robot_state_topics (dict[str, TopicStatistics]): Mapping of robot state topics to their statistics.
-        actions (dict[str, list[RobotAction]]): Mapping of robot action topics to lists of robot actions.
-        action_topics (dict[str, TopicStatistics]): Mapping of robot action topics to their statistics.
+        compressed_videos (dict[str, CompressedVideoInfo]): Compressed video per camera.
+        video_stats (dict[str, TopicStatistics]): Timing statistics per camera.
+        robot_states (dict[str, list[RobotState]]): Decoded values per state segment.
+        state_stats (dict[str, TopicStatistics]): Timing statistics per state segment.
+        actions (dict[str, list[RobotAction]]): Decoded values per action segment.
+        action_stats (dict[str, TopicStatistics]): Timing statistics per action segment.
         metadata (dict[str, Any]): Arbitrary metadata associated with the MCAP extraction.
         mcap_summary (McapSummary): Summary information about the MCAP file.
     """
 
     compressed_videos: dict[str, CompressedVideoInfo]
-    video_topics: dict[str, TopicStatistics]
+    video_stats: dict[str, TopicStatistics]
     robot_states: dict[str, list[RobotState]]
-    robot_state_topics: dict[str, TopicStatistics]
+    state_stats: dict[str, TopicStatistics]
     actions: dict[str, list[RobotAction]]
-    action_topics: dict[str, TopicStatistics]
+    action_stats: dict[str, TopicStatistics]
     metadata: dict[str, Any]
     mcap_summary: McapSummary
 

@@ -9,9 +9,9 @@ import threading
 import time
 
 from loguru import logger
+from pipeline_configs.station import StationConfig
 from rclpy.executors import MultiThreadedExecutor
 
-from configs.station import StationConfig
 from helpers.rclpy_guard import safe_init
 from models.teleop import TeleopResponse, TeleopStatusResponse
 from services.franka_robot import FrankaRobotService

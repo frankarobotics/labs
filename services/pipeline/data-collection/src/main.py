@@ -9,11 +9,11 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
+from pipeline_configs.cors import CORSConfig, load_cors_config
+from pipeline_configs.station import StationConfig, load_station_config
 
-from configs.cors import CORSConfig, load_cors_config
 from configs.data_collection import DataCollectionConfig, load_data_collection_config
 from configs.logger import LoggerConfig, load_logger_config
-from configs.station import StationConfig, load_station_config
 from dependencies import (
     get_device_repo,
     get_robot_service,

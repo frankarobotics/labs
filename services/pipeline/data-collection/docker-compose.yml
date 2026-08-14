@@ -3,6 +3,8 @@ services:
     image: ${DOCKER_REGISTRY:-registry.localhost}/labs/data-collection:${DOCKER_TAG:-latest}
     build:
       context: .
+      additional_contexts:
+        packages: ../packages
       dockerfile: data-collection.dockerfile
       target: ${BUILD_TARGET:-dev}
       args:

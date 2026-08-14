@@ -49,18 +49,24 @@ embodiment:
       config:
         rgb:
           topic: /head_camera/zed_node/rgb/image_rect_color
+        info:
+          topic: /head_camera/zed_node/rgb/camera_info
 
     - id: wrist_left
       type: REALSENSE_CAMERA
       config:
         rgb:
           topic: /wrist_camera_left/camera/color/image_raw
+        info:
+          topic: /wrist_camera_left/camera/color/camera_info
 
     - id: wrist_right
       type: REALSENSE_CAMERA
       config:
         rgb:
           topic: /wrist_camera_right/camera/color/image_raw
+        info:
+          topic: /wrist_camera_right/camera/color/camera_info
 
     - id: franka_robot_left
       type: ROBOT_OBSERVER
@@ -79,3 +85,15 @@ embodiment:
           - /right/follower/gripper/joint_states
           - /right/franka_robot_state_broadcaster/external_joint_torques
           - /right/franka_robot_state_broadcaster/external_wrench_in_stiffness_frame
+
+  # Topics bound to no device: recorded as-is, never mapped into a dataset.
+  # Add USER_TOPICS entries for anything else you want in the recordings.
+  other_topics:
+    - id: ros_infra
+      type: ROS_INFRA
+      config:
+        topics:
+          - /parameter_events
+          - /rosout
+          - /tf
+          - /tf_static

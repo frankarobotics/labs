@@ -3,6 +3,8 @@ services:
     image: ${DOCKER_REGISTRY:-registry.localhost}/labs/dataset-builder:${DOCKER_TAG:-latest}
     build:
       context: .
+      additional_contexts:
+        packages: ../packages
       dockerfile: dataset-builder.dockerfile
       target: ${BUILD_TARGET:-dev}
       args:

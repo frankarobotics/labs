@@ -60,6 +60,47 @@
 - The `example_station` deployment got renamed to `fr3_duo_example`. Users who edited this deployment might need to
   stash their changes before pulling and then re-apply them.
 - Services can now be started offline after a prior online build
+- Refactor config loaders (CORS and station) in a common library shared by multiple services
+- **Breaking Change:** `config_station.yml` is now the single source of truth for the recorded ROS 2 topics.
+
+  **Upgrade steps:**
+  1. Remove `ros_topics` from `config_data_recorder.yml` — the data-recorder now rejects the key at startup.
+  2. In `config_station.yml`, declare each camera's calibration stream as an `info.topic` next to its image streams
+     (previously the recorder appended `camera_info` implicitly).
+  3. In `config_station.yml`, add the ROS graph topics under the new `embodiment.other_topics` section as a `ROS_INFRA`
+     entry (previously hard-coded in the recorder), and any extra topics you record as `USER_TOPICS` entries. See the
+     [Deployment README](deployments/README.md#recorded-topics) and `deployments/fr3_duo_example/config_station.yml`.
+
+- **Breaking Change:** Add a `packages` folder to `services` for shared libraries, and move the station and CORS config
+  loaders there.
+
+  **Upgrade steps:**
+  1. Copy `packages_context_custom_build` of the example station's `Tiltfile` to your deployment's `Tiltfile`.
+  2. Use this function for the packages that need access to the station and CORS config loaders, e.g.: data-collection
+     and data-recorder. See the example station's `Tiltfile` for usage examples.
+
+- Create `config_contract_gr00t.yml` in deployments to define the contract for GR00T models that the dataset-builder
+  service uses for the creation of the dataset.
+- Fix the processing of the `geometry_msgs/TwistStamped` message type in `config_station.yml`.
+- **Breaking Change:** dataset-builder now builds datasets from a policy contract instead of `config_station.yml` +
+  `config_data_recorder.yml`:
+  - `--station-config`, `--recorder-config` and `--modality-config` are replaced by `--policy-contract`.
+    `--deployment-dir` keeps working and resolves the policy contract from the deployment folder.
+  - Added `--policy-type` (default `gr00t`) to select `config_contract_<policy-type>.yml` from `--deployment-dir`
+  - The contract is required; the previous fallback to ROS schema-name heuristics is gone, since it could not produce
+    the declared state/action vector layout.
+  - `--fps` now defaults to the contract's `policy.control_rate_hz` rather than `20.0`, and only acts as an override.
+  - Parquet state columns are named `observation.state.<policy_key>` (previously derived from the topic name), and
+    `meta/modality.json` is generated from the contract instead of copied from the deployment.
+  - Several segments may now read the same topic, so a `sensor_msgs/JointState` topic can contribute positions,
+    velocities and efforts to one dataset, each reordered to the contract's `element_names`.
+  - An episode missing any topic the contract declares is rejected instead of silently producing shorter vectors.
+  - Camera segments can set `resize: true` to letterbox recordings to the declared contract shape while preserving the
+    source aspect ratio.
+
+  **Upgrade steps:** Add a `config_contract_gr00t.yml` to each custom deployment, following the `fr3_duo_example` one
+  (see the [dataset-builder README](services/pipeline/dataset-builder/README.md#policy-contract)), and delete the now
+  unused `modality.json`.
 
 ## [0.1.1] - 2026-06-01
 

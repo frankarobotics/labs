@@ -1,10 +1,8 @@
-"""Domain model for modality.json configuration."""
+"""Domain model for modality.json, the layout GR00T reads the flat vectors with."""
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 
@@ -55,7 +53,7 @@ class AnnotationEntry:
 
 @dataclass(frozen=True)
 class ModalityConfig:
-    """Parsed representation of modality.json."""
+    """The modality layout dataset-builder generates from a policy contract."""
 
     state_segments: tuple[StateSegment, ...]
     action_segments: tuple[ActionSegment, ...]
@@ -76,38 +74,8 @@ class ModalityConfig:
             return 0
         return max(seg.end for seg in self.action_segments)
 
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> ModalityConfig:
-        """Create a ModalityConfig from a dictionary."""
-        state_segments = tuple(
-            StateSegment(name=k, start=v["start"], end=v["end"]) for k, v in (data.get("state") or {}).items()
-        )
-        action_segments = tuple(
-            ActionSegment(name=k, start=v["start"], end=v["end"]) for k, v in (data.get("action") or {}).items()
-        )
-        video_entries = tuple(
-            VideoModalityEntry(key=k, original_key=v.get("original_key", k))
-            for k, v in (data.get("video") or {}).items()
-        )
-        annotation_entries = tuple(
-            AnnotationEntry(key=k, original_key=v.get("original_key"))
-            for k, v in (data.get("annotation") or {}).items()
-        )
-        return cls(
-            state_segments=state_segments,
-            action_segments=action_segments,
-            video_entries=video_entries,
-            annotation_entries=annotation_entries,
-        )
-
-    @classmethod
-    def from_file(cls, path: Path) -> ModalityConfig:
-        """Load a ModalityConfig from a JSON file."""
-        with path.open() as f:
-            return cls.from_dict(json.load(f))
-
     def to_dict(self) -> dict[str, Any]:
-        """Serialize back to the modality.json wire format."""
+        """Serialize to the modality.json wire format."""
         return {
             "state": {seg.name: {"start": seg.start, "end": seg.end} for seg in self.state_segments},
             "action": {seg.name: {"start": seg.start, "end": seg.end} for seg in self.action_segments},

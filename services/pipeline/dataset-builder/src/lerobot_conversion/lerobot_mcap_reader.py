@@ -1,23 +1,27 @@
-"""LeRobot MCAP Reader for extracting CompressedVideo and robot state data."""
+"""MCAP reader that extracts exactly the cameras, state and action segments a policy contract declares."""
 
 import json
 from collections import defaultdict
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
 import mcap.reader
-from foxglove.schemas import CompressedVideo
-from geometry_msgs.msg import PoseStamped, TwistStamped, WrenchStamped  # type: ignore[import-not-found]
 from loguru import logger
 from mcap.records import Channel, Message, Schema
 from mcap_protobuf.decoder import DecoderFactory as ProtobufDecoderFactory
 from mcap_ros2.decoder import DecoderFactory
-from sensor_msgs.msg import JointState  # type: ignore[import-not-found]
-from std_msgs.msg import Bool, Float32  # type: ignore[import-not-found]
+from pipeline_configs import PolicySegment
 
-from lerobot_conversion.topic_manifest import DatasetTopicManifest
+from lerobot_conversion.policy_manifest import PolicyManifest
+from lerobot_conversion.segment_decoder import (
+    COMPRESSED_VIDEO_SCHEMA_NAME,
+    MCAP_SCHEMA_NAMES,
+    SegmentDecodeError,
+    decode_segment,
+)
 from models.compressed_video_info import CompressedVideoInfo
 from models.extracted_mcap_data import ExtractedMcapData
 from models.mcap_summary import McapSummary
@@ -26,12 +30,27 @@ from models.robot_state import RobotState
 from models.topic_info import TopicInfo
 from models.topic_statistics import TopicStatistics
 
+# recorded alongside the contract's topics and never part of a dataset
+IGNORED_TOPICS = frozenset({"/rosout", "/tf", "/tf_static", "/parameter_events"})
+IGNORED_SCHEMA_NAMES = frozenset({"sensor_msgs/msg/CompressedImage"})
+
+PROGRESS_LOG_INTERVAL = 5000
+
 
 class _DecodeFailed:
     """Sentinel yielded for messages that could not be decoded."""
 
 
 DECODE_FAILED = _DecodeFailed()
+
+
+@dataclass
+class _Extraction:
+    """Per-file accumulator, keyed by the policy_key each contract segment owns."""
+
+    compressed_videos: dict[str, CompressedVideoInfo] = field(default_factory=dict)
+    robot_states: defaultdict[str, list[RobotState]] = field(default_factory=lambda: defaultdict(list))
+    actions: defaultdict[str, list[RobotAction]] = field(default_factory=lambda: defaultdict(list))
 
 
 class ResilientDecoderFactory:
@@ -69,31 +88,21 @@ class ResilientDecoderFactory:
 class LeRobotMCAPReader:
     """MCAP reader specialized for LeRobot dataset conversion."""
 
-    def __init__(self, topic_manifest: DatasetTopicManifest | None = None) -> None:
-        """Initialize LeRobot MCAP reader."""
+    def __init__(self, manifest: PolicyManifest) -> None:
+        """Initialize the reader for one policy contract."""
+        self.manifest = manifest
+        # Topics already reported during the current extraction, so each is logged once
+        # instead of per message. Reset at the start of every extract.
+        self._logged_topics: set[str] = set()
         logger.debug("LeRobot MCAP Reader initialized")
-        self.topic_manifest = topic_manifest
-        # Topics already reported as "ignored" during the current extraction, so each
-        # is logged once instead of per message. Reset at the start of every extract.
-        self._logged_ignored_topics: set[str] = set()
-        # Topics whose message payload did not match the expected schema, logged once
-        # per topic instead of per message. Reset at the start of every extract.
-        self._logged_state_extraction_errors: set[str] = set()
 
     def extract_lerobot_data(self, mcap_path: Path) -> ExtractedMcapData:
-        """Extract all data needed for LeRobot conversion."""
+        """Extract all data the contract declares from one MCAP file."""
         logger.info("Extracting data for LeRobot conversion...")
 
-        compressed_videos: dict[str, CompressedVideoInfo] = {}
-        robot_states: dict[str, list[RobotState]] = {}
-        actions: dict[str, list[RobotAction]] = {}
-        metadata: dict[str, Any] = {}
-
-        # Per-extraction log de-duplication / aggregation to keep logs readable
-        # even when many messages are ignored or undecodable.
-        self._logged_ignored_topics = set()
-        self._logged_state_extraction_errors = set()
+        self._logged_topics = set()
         undecodable_counts: defaultdict[str, int] = defaultdict(int)
+        extraction = _Extraction()
 
         try:
             with open(mcap_path, "rb") as f:
@@ -103,219 +112,163 @@ class LeRobotMCAPReader:
                 logger.debug(f"Found topics: {list(mcap_summary.topics.keys())}")
 
                 message_count = 0
-
                 for schema, channel, message, ros_message in reader.iter_decoded_messages():
                     message_count += 1
 
-                    if message_count % 5000 == 0:
+                    if message_count % PROGRESS_LOG_INTERVAL == 0:
                         logger.debug(f"Processed {message_count} messages...")
 
-                    topic_name: str = channel.topic
-
                     if ros_message is DECODE_FAILED:
-                        undecodable_counts[topic_name] += 1
+                        undecodable_counts[channel.topic] += 1
                         continue
 
                     try:
-                        self._handle_message(
-                            topic_name, schema, message, ros_message, compressed_videos, robot_states, actions
-                        )
+                        # mutates extraction in place, accumulating this message into its segment's list
+                        self._handle_message(channel.topic, schema, message, ros_message, extraction)
                     except Exception as e:
-                        logger.error(f"Error processing message {message.log_time} on topic {topic_name}: {e}")
+                        logger.error(f"Error processing message {message.log_time} on topic {channel.topic}: {e}")
 
                 logger.info(f"Extracted {message_count} total messages")
+                self._log_undecodable(undecodable_counts)
 
-                if undecodable_counts:
-                    total_undecodable = sum(undecodable_counts.values())
-                    per_topic = ", ".join(f"{topic} ({count})" for topic, count in sorted(undecodable_counts.items()))
-                    logger.warning(f"Skipped {total_undecodable} undecodable messages across topics: {per_topic}")
-
-                if self.topic_manifest is not None:
-                    compressed_videos = self.topic_manifest.order_image_topics(compressed_videos)
-                    robot_states = self.topic_manifest.order_state_topics(robot_states)
-                    actions = self.topic_manifest.order_action_topics(actions)
-
-                # Extract original metadata
-                metadata = self._extract_metadata(reader)
-
-                robot_state_topics = {topic: self._get_stats(states) for topic, states in robot_states.items()}
-                action_topics = {topic: self._get_stats(action) for topic, action in actions.items()}
-                video_topics = {
-                    topic: self._get_video_stats(topic, video, metadata) for topic, video in compressed_videos.items()
-                }
-
-                return ExtractedMcapData(
-                    compressed_videos=compressed_videos,
-                    video_topics=video_topics,
-                    robot_states=robot_states,
-                    robot_state_topics=robot_state_topics,
-                    actions=actions,
-                    action_topics=action_topics,
-                    metadata=metadata,
-                    mcap_summary=mcap_summary,
-                )
+                return self._build_extracted_data(extraction, self._extract_metadata(reader), mcap_summary)
 
         except Exception as e:
             logger.error(f"Failed to extract mcap data from {mcap_path}: {e}")
             raise
 
-    def _handle_message(  # noqa: PLR0913
-        self,
-        topic_name: str,
-        schema: Schema | None,
-        message: Message,
-        ros_message: Any,  # noqa: ANN401
-        compressed_videos: dict[str, CompressedVideoInfo],
-        robot_states: dict[str, list[RobotState]],
-        actions: dict[str, list[RobotAction]],
-    ) -> None:
-        if self.topic_manifest is not None:
-            self._handle_manifest_message(
-                topic_name, schema, message, ros_message, compressed_videos, robot_states, actions
-            )
-            return
+    def _build_extracted_data(
+        self, extraction: _Extraction, metadata: dict[str, Any], mcap_summary: McapSummary
+    ) -> ExtractedMcapData:
+        """Order every modality by the contract and pair it with its timing statistics."""
+        compressed_videos = self.manifest.order_cameras(extraction.compressed_videos)
+        robot_states = self.manifest.order_state(dict(extraction.robot_states))
+        actions = self.manifest.order_action(dict(extraction.actions))
 
-        logger.warning(
-            f"No topic manifest provided, processing all topics with best-effort handling. Topic: {topic_name}"
-        )
-        if self._is_ignored_topic(topic_name, schema):
-            pass
-        elif self._is_compressed_video(schema):
-            self._handle_compressed_video(topic_name, message, ros_message, compressed_videos)
-        elif self._is_joint_state(schema):
-            self._handle_joint_state(topic_name, message, ros_message, robot_states)
-        elif self._is_pose_stamped(schema):
-            self._handle_pose_stamped(topic_name, message, ros_message, robot_states)
-        elif self._is_twist_stamped(schema):
-            self._handle_twist_stamped(topic_name, message, ros_message, actions)
-        elif self._is_wrench_stamped(schema):
-            self._handle_wrench_stamped(topic_name, message, ros_message, robot_states)
-        elif self._is_float_32(schema):
-            self._handle_float32(topic_name, message, ros_message, robot_states, actions)
-        elif self._is_bool(schema):
-            self._handle_bool(topic_name, message, ros_message, robot_states)
-        else:
-            logger.info(f"Ignoring unsupported topic {topic_name} with schema {schema.name if schema else 'None'}")
-
-    def _handle_manifest_message(  # noqa: PLR0913
-        self,
-        topic_name: str,
-        schema: Schema | None,
-        message: Message,
-        ros_message: Any,  # noqa: ANN401
-        compressed_videos: dict[str, CompressedVideoInfo],
-        robot_states: dict[str, list[RobotState]],
-        actions: dict[str, list[RobotAction]],
-    ) -> None:
-        topic_role = self.topic_manifest.classify_topic(topic_name) if self.topic_manifest is not None else None
-
-        if topic_role == "ignored":
-            return
-        if topic_role == "image":
-            if self._is_compressed_video(schema):
-                self._handle_compressed_video(topic_name, message, ros_message, compressed_videos)
-            return
-        if topic_role == "state":
-            self._handle_state_topic(topic_name, schema, message, ros_message, robot_states)
-            return
-        if topic_role == "action":
-            self._handle_action_topic(topic_name, schema, message, ros_message, actions)
-            return
-
-        if self._is_ignored_topic(topic_name, schema):
-            return
-
-        if topic_name not in self._logged_ignored_topics:
-            self._logged_ignored_topics.add(topic_name)
-            logger.info(
-                f"Ignoring topic outside configured manifest {topic_name} "
-                f"with schema {schema.name if schema else 'None'}"
-            )
-
-    def _handle_state_topic(
-        self,
-        topic_name: str,
-        schema: Schema | None,
-        message: Message,
-        ros_message: Any,  # noqa: ANN401
-        robot_states: dict[str, list[RobotState]],
-    ) -> None:
-        if self._is_joint_state(schema):
-            self._handle_joint_state(topic_name, message, ros_message, robot_states)
-        elif self._is_pose_stamped(schema):
-            self._handle_pose_stamped(topic_name, message, ros_message, robot_states)
-        elif self._is_wrench_stamped(schema):
-            self._handle_wrench_stamped(topic_name, message, ros_message, robot_states)
-        elif self._is_bool(schema):
-            self._handle_bool(topic_name, message, ros_message, robot_states)
-        elif self._is_float_32(schema):
-            self._handle_float32_state(topic_name, message, ros_message, robot_states)
-        else:
-            logger.info(
-                "Ignoring configured observation topic {} with unsupported schema {}",
-                topic_name,
-                schema.name if schema else "None",
-            )
-
-    def _handle_action_topic(
-        self,
-        topic_name: str,
-        schema: Schema | None,
-        message: Message,
-        ros_message: Any,  # noqa: ANN401
-        actions: dict[str, list[RobotAction]],
-    ) -> None:
-        if self._is_joint_state(schema):
-            self._handle_joint_state_action(topic_name, message, ros_message, actions)
-        elif self._is_twist_stamped(schema):
-            self._handle_twist_stamped(topic_name, message, ros_message, actions)
-        elif self._is_float_32(schema):
-            self._handle_gripper_action(topic_name, message, ros_message, actions)
-        else:
-            logger.info(
-                "Ignoring configured action topic {} with unsupported schema {}",
-                topic_name,
-                schema.name if schema else "None",
-            )
-
-    def _is_ignored_topic(self, topic_name: str, schema: Schema | None) -> bool:
-        ignored_topics = {"/rosout", "/tf", "/tf_static", "/parameter_events"}
-        return topic_name in ignored_topics or (schema is not None and schema.name == "sensor_msgs/msg/CompressedImage")
-
-    def _is_compressed_video(self, schema: Schema | None) -> bool:
-        return schema is not None and schema.name == "foxglove.CompressedVideo"
-
-    def _is_joint_state(self, schema: Schema | None) -> bool:
-        return schema is not None and schema.name == "sensor_msgs/msg/JointState"
-
-    def _is_pose_stamped(self, schema: Schema | None) -> bool:
-        return schema is not None and schema.name == "geometry_msgs/msg/PoseStamped"
-
-    def _is_twist_stamped(self, schema: Schema | None) -> bool:
-        return schema is not None and schema.name == "geometry_msgs/msg/TwistStamped"
-
-    def _is_wrench_stamped(self, schema: Schema | None) -> bool:
-        return schema is not None and schema.name == "geometry_msgs/msg/WrenchStamped"
-
-    def _is_float_32(self, schema: Schema | None) -> bool:
-        return schema is not None and schema.name == "std_msgs/msg/Float32"
-
-    def _is_bool(self, schema: Schema | None) -> bool:
-        return schema is not None and schema.name == "std_msgs/msg/Bool"
-
-    def _is_gripper_action(self, topic_name: str) -> bool:
-        # /franka_gello/left/gripper/gripper_client/target_gripper_width_percent
-        # /franka_gello/right/gripper/gripper_client/target_gripper_width_percent
-        # /robotiq_gripper/left/f_30hz/robotiq_2f_gripper/binary_command
-        # /robotiq_gripper/right/f_30hz/robotiq_2f_gripper/binary_command
-        return "gripper" in topic_name.lower() and (
-            "target_gripper_width_percent" in topic_name.lower() or "binary_command" in topic_name.lower()
+        return ExtractedMcapData(
+            compressed_videos=compressed_videos,
+            video_stats={key: self._get_video_stats(key, video, metadata) for key, video in compressed_videos.items()},
+            robot_states=robot_states,
+            state_stats={key: self._get_stats(states) for key, states in robot_states.items()},
+            actions=actions,
+            action_stats={key: self._get_stats(action) for key, action in actions.items()},
+            metadata=metadata,
+            mcap_summary=mcap_summary,
         )
 
-    def _is_gripper_state(self, topic_name: str) -> bool:
-        """Determine if the topic is a gripper state topic."""
-        # /robotiq_gripper/right/f_30hz/robotiq_2f_gripper/finger_distance_mm
-        return "gripper" in topic_name.lower() and ("finger_distance_mm" in topic_name.lower())
+    def _handle_message(
+        self,
+        topic_name: str,
+        schema: Schema | None,
+        message: Message,
+        ros_message: Any,  # noqa: ANN401 - decoded ROS or protobuf message
+        extraction: _Extraction,
+    ) -> None:
+        """Feed one message into every contract segment that reads its topic."""
+        cameras = self.manifest.cameras_by_topic.get(topic_name, ())
+        state_segments = self.manifest.state_by_topic.get(topic_name, ())
+        action_segments = self.manifest.action_by_topic.get(topic_name, ())
+
+        if not (cameras or state_segments or action_segments):
+            self._log_unconfigured_topic(topic_name, schema)
+            return
+
+        if cameras and self._schema_matches(topic_name, schema, COMPRESSED_VIDEO_SCHEMA_NAME):
+            for camera in cameras:
+                self._handle_compressed_video(camera.policy_key, message, ros_message, extraction)
+
+        for segment in state_segments:
+            values = self._decode(segment, topic_name, schema, ros_message)
+            if values is not None:
+                extraction.robot_states[segment.policy_key].append(
+                    RobotState(
+                        timestamp_ns=message.log_time,
+                        publish_time_ns=message.publish_time,
+                        names=list(segment.element_names),
+                        values=values,
+                    )
+                )
+
+        for segment in action_segments:
+            values = self._decode(segment, topic_name, schema, ros_message)
+            if values is not None:
+                extraction.actions[segment.policy_key].append(
+                    RobotAction(
+                        timestamp_ns=message.log_time,
+                        publish_time_ns=message.publish_time,
+                        names=list(segment.element_names),
+                        values=values,
+                    )
+                )
+
+    def _decode(
+        self,
+        segment: PolicySegment,
+        topic_name: str,
+        schema: Schema | None,
+        ros_message: Any,  # noqa: ANN401
+    ) -> list[float] | None:
+        """Decode one segment, or return None after reporting why the message cannot supply it."""
+        if not self._schema_matches(topic_name, schema, MCAP_SCHEMA_NAMES[segment.message_type]):
+            return None
+        try:
+            return decode_segment(segment, ros_message)
+        except SegmentDecodeError as e:
+            if self._first_report(f"decode:{segment.policy_key}"):
+                logger.error(str(e))
+            return None
+
+    def _schema_matches(self, topic_name: str, schema: Schema | None, expected: str) -> bool:
+        """Whether a topic carries the schema the contract declared for it."""
+        actual = schema.name if schema else "None"
+        if actual == expected:
+            return True
+        if self._first_report(f"schema:{topic_name}"):
+            logger.error(f"Contract declares {expected} for {topic_name} but it was recorded as {actual}; skipping it")
+        return False
+
+    def _handle_compressed_video(
+        self,
+        policy_key: str,
+        message: Message,
+        ros_message: Any,  # noqa: ANN401 - foxglove.CompressedVideo
+        extraction: _Extraction,
+    ) -> None:
+        """Store the single CompressedVideo message a processed episode carries per camera."""
+        video_format = getattr(ros_message, "format", "unknown")
+        video_data = CompressedVideoInfo(
+            timestamp_ns=message.log_time,
+            publish_time_ns=message.publish_time,
+            format=video_format,
+            data=bytes(getattr(ros_message, "data", b"")),
+        )
+        extraction.compressed_videos[policy_key] = video_data
+
+        logger.info(
+            f"Extracted CompressedVideo for {policy_key}: {len(video_data.data)} bytes, format: {video_data.format}"
+        )
+
+    def _log_unconfigured_topic(self, topic_name: str, schema: Schema | None) -> None:
+        """Report a recorded topic no contract segment reads, once per topic."""
+        schema_name = schema.name if schema else "None"
+        if topic_name in IGNORED_TOPICS or schema_name in IGNORED_SCHEMA_NAMES:
+            return
+        if self._first_report(f"unconfigured:{topic_name}"):
+            logger.info(f"Ignoring topic outside the policy contract {topic_name} with schema {schema_name}")
+
+    def _first_report(self, key: str) -> bool:
+        """Whether a per-topic diagnostic still has to be emitted; keeps per-message findings out of the logs."""
+        if key in self._logged_topics:
+            return False
+        self._logged_topics.add(key)
+        return True
+
+    def _log_undecodable(self, undecodable_counts: dict[str, int]) -> None:
+        if not undecodable_counts:
+            return
+        total = sum(undecodable_counts.values())
+        per_topic = ", ".join(f"{topic} ({count})" for topic, count in sorted(undecodable_counts.items()))
+        logger.warning(f"Skipped {total} undecodable messages across topics: {per_topic}")
 
     def _build_decoder_factories(self) -> list[Any]:
         """Build fresh decoder factories for a single MCAP file.
@@ -333,7 +286,7 @@ class LeRobotMCAPReader:
         summary = reader.get_summary()
 
         if not summary:
-            raise Exception("Failed to get MCAP summary")
+            raise ValueError("Failed to get MCAP summary")
 
         channels = summary.channels
         statistics = summary.statistics
@@ -358,334 +311,6 @@ class LeRobotMCAPReader:
             message_encoding=channel.message_encoding,
             message_count=channel_message_count or 0,
         )
-
-    def _log_extraction_error_once(self, topic_name: str, schema_type: str, error: Exception) -> None:
-        """Log a schema-extraction failure once per topic to avoid per-message log spam."""
-        if topic_name not in self._logged_state_extraction_errors:
-            self._logged_state_extraction_errors.add(topic_name)
-            logger.error(
-                f"Failed to extract {schema_type} from {topic_name} "
-                f"(payload does not match {schema_type} schema, logged once per topic): {error}"
-            )
-
-    def _handle_compressed_video(
-        self,
-        topic_name: str,
-        message: Message,
-        ros_message: CompressedVideo,
-        compressed_videos: dict[str, CompressedVideoInfo],
-    ) -> None:
-        """Handle CompressedVideo message extraction."""
-        try:
-            # Extract video data from Foxglove CompressedVideo protobuf
-            # Access attributes with getattr for safety since protobuf message structure may vary
-            video_format = getattr(ros_message, "format", "unknown")  # Should be "mp4" or similar
-            video_data_bytes = getattr(ros_message, "data", b"")  # The actual MP4/AV1 video bytes
-            video_data = CompressedVideoInfo(
-                timestamp_ns=message.log_time,
-                publish_time_ns=message.publish_time,
-                format=video_format,
-                data=bytes(video_data_bytes),
-            )
-
-            compressed_videos[topic_name] = video_data
-
-            logger.info(
-                f"Extracted CompressedVideo from {topic_name}: {len(video_data.data)} bytes, "
-                f"format: {video_data.format}"
-            )
-
-        except Exception as e:
-            self._log_extraction_error_once(topic_name, "CompressedVideo", e)
-
-    def _handle_joint_state(
-        self,
-        topic_name: str,
-        message: Message,
-        ros_message: JointState,
-        robot_states: dict[str, list[RobotState]],
-    ) -> None:
-        """Handle JointState message extraction."""
-        try:
-            robot_state = RobotState(
-                timestamp_ns=message.log_time,
-                publish_time_ns=message.publish_time,
-                names=list(ros_message.name),  # Joint names
-                values=list(ros_message.position),  # Joint positions
-            )
-
-            if topic_name not in robot_states:
-                robot_states[topic_name] = []
-
-            robot_states[topic_name].append(robot_state)
-
-        except Exception as e:
-            self._log_extraction_error_once(topic_name, "JointState", e)
-
-    def _handle_pose_stamped(
-        self,
-        topic_name: str,
-        message: Message,
-        ros_message: PoseStamped,
-        robot_states: dict[str, list[RobotState]],
-    ) -> None:
-        """Handle PoseStamped message extraction."""
-        try:
-            position = ros_message.pose.position
-            orientation = ros_message.pose.orientation
-
-            # Flatten position and orientation into a single list
-            pose_values = [
-                position.x,
-                position.y,
-                position.z,
-                orientation.x,
-                orientation.y,
-                orientation.z,
-                orientation.w,
-            ]
-
-            robot_state = RobotState(
-                timestamp_ns=message.log_time,
-                publish_time_ns=message.publish_time,
-                values=pose_values,
-                names=[
-                    "position_x",
-                    "position_y",
-                    "position_z",
-                    "orientation_x",
-                    "orientation_y",
-                    "orientation_z",
-                    "orientation_w",
-                ],
-            )
-
-            if topic_name not in robot_states:
-                robot_states[topic_name] = []
-
-            robot_states[topic_name].append(robot_state)
-
-        except Exception as e:
-            self._log_extraction_error_once(topic_name, "PoseStamped", e)
-
-    def _handle_joint_state_action(
-        self,
-        topic_name: str,
-        message: Message,
-        ros_message: JointState,
-        actions: dict[str, list[RobotAction]],
-    ) -> None:
-        """Handle JointState message extraction for action topics."""
-        try:
-            action = RobotAction(
-                timestamp_ns=message.log_time,
-                publish_time_ns=message.publish_time,
-                names=list(ros_message.name),
-                values=list(ros_message.position),
-            )
-
-            if topic_name not in actions:
-                actions[topic_name] = []
-
-            actions[topic_name].append(action)
-
-        except Exception as e:
-            self._log_extraction_error_once(topic_name, "JointState", e)
-
-    def _handle_twist_stamped(
-        self,
-        topic_name: str,
-        message: Message,
-        ros_message: TwistStamped,
-        actions: dict[str, list[RobotAction]],
-    ) -> None:
-        """Handle TwistStamped message extraction."""
-        try:
-            linear = ros_message.twist.linear
-            angular = ros_message.twist.angular
-
-            # Flatten linear and angular into a single list
-            twist_values = [
-                linear.x,
-                linear.y,
-                linear.z,
-                angular.x,
-                angular.y,
-                angular.z,
-            ]
-
-            action = RobotAction(
-                timestamp_ns=message.log_time,
-                publish_time_ns=message.publish_time,
-                values=twist_values,
-                names=[
-                    "linear_x",
-                    "linear_y",
-                    "linear_z",
-                    "angular_x",
-                    "angular_y",
-                    "angular_z",
-                ],
-            )
-
-            if topic_name not in actions:
-                actions[topic_name] = []
-
-            actions[topic_name].append(action)
-
-        except Exception as e:
-            self._log_extraction_error_once(topic_name, "TwistStamped", e)
-
-    def _handle_wrench_stamped(
-        self,
-        topic_name: str,
-        message: Message,
-        ros_message: WrenchStamped,
-        robot_states: dict[str, list[RobotState]],
-    ) -> None:
-        """Handle WrenchStamped message extraction."""
-        try:
-            force = ros_message.wrench.force
-            torque = ros_message.wrench.torque
-
-            wrench_values = [
-                force.x,
-                force.y,
-                force.z,
-                torque.x,
-                torque.y,
-                torque.z,
-            ]
-
-            robot_state = RobotState(
-                timestamp_ns=message.log_time,
-                publish_time_ns=message.publish_time,
-                values=wrench_values,
-                names=[
-                    "force_x",
-                    "force_y",
-                    "force_z",
-                    "torque_x",
-                    "torque_y",
-                    "torque_z",
-                ],
-            )
-
-            if topic_name not in robot_states:
-                robot_states[topic_name] = []
-
-            robot_states[topic_name].append(robot_state)
-
-        except Exception as e:
-            self._log_extraction_error_once(topic_name, "WrenchStamped", e)
-
-    def _handle_float32(
-        self,
-        topic_name: str,
-        message: Message,
-        ros_message: Float32,
-        robot_states: dict[str, list[RobotState]],
-        actions: dict[str, list[RobotAction]],
-    ) -> None:
-        """Handle Float32 message extraction."""
-        if self._is_gripper_action(topic_name):
-            self._handle_gripper_action(topic_name, message, ros_message, actions)
-        elif self._is_gripper_state(topic_name):
-            self._handle_gripper_state(topic_name, message, ros_message, robot_states)
-        else:
-            logger.info(f"Ignoring unsupported topic {topic_name} with schema std_msgs/msg/Float32")
-
-    def _handle_float32_state(
-        self,
-        topic_name: str,
-        message: Message,
-        ros_message: Float32,
-        robot_states: dict[str, list[RobotState]],
-    ) -> None:
-        """Handle Float32 message extraction for configured observation topics."""
-        try:
-            if topic_name not in robot_states:
-                robot_states[topic_name] = []
-
-            robot_state = RobotState(
-                timestamp_ns=message.log_time,
-                publish_time_ns=message.publish_time,
-                names=["value"],
-                values=[float(ros_message.data)],
-            )
-
-            robot_states[topic_name].append(robot_state)
-
-        except Exception as e:
-            logger.error(f"Failed to extract Float32 state from {topic_name}: {e}")
-
-    def _handle_bool(
-        self,
-        topic_name: str,
-        message: Message,
-        ros_message: Bool,
-        robot_states: dict[str, list[RobotState]],
-    ) -> None:
-        """Handle Bool message extraction."""
-        try:
-            if topic_name not in robot_states:
-                robot_states[topic_name] = []
-
-            robot_state = RobotState(
-                timestamp_ns=message.log_time,
-                publish_time_ns=message.publish_time,
-                values=[1.0 if bool(ros_message.data) else -1.0],  # -1.0 for False, 1.0 for True
-                names=["value"],  # Use hard coded topic name
-            )
-
-            robot_states[topic_name].append(robot_state)
-
-        except Exception as e:
-            logger.error(f"Failed to extract Bool state from {topic_name}: {e}")
-
-    def _handle_gripper_action(
-        self, topic_name: str, message: Message, ros_message: Float32, actions: dict[str, list[RobotAction]]
-    ) -> None:
-        """Handle gripper action message extraction."""
-        try:
-            if topic_name not in actions:
-                actions[topic_name] = []
-
-            action = RobotAction(
-                timestamp_ns=message.log_time,
-                publish_time_ns=message.publish_time,
-                values=[float(ros_message.data)],
-                names=["value"],
-            )
-
-            actions[topic_name].append(action)
-
-        except Exception as e:
-            logger.error(f"Failed to extract gripper action from {topic_name}: {e}")
-
-    def _handle_gripper_state(
-        self,
-        topic_name: str,
-        message: Message,
-        ros_message: Float32,
-        robot_states: dict[str, list[RobotState]],
-    ) -> None:
-        """Handle gripper state message extraction."""
-        try:
-            if topic_name not in robot_states:
-                robot_states[topic_name] = []
-
-            robot_state = RobotState(
-                timestamp_ns=message.log_time,
-                publish_time_ns=message.publish_time,
-                names=["value"],
-                values=[float(ros_message.data)],
-            )
-
-            robot_states[topic_name].append(robot_state)
-
-        except Exception as e:
-            logger.error(f"Failed to extract gripper state from {topic_name}: {e}")
 
     def _extract_metadata(self, reader: mcap.reader.McapReader) -> dict[str, Any]:
         """Extract original MCAP metadata."""
@@ -727,14 +352,21 @@ class LeRobotMCAPReader:
             fps=average_frequency_hz,
         )
 
-    def _get_video_stats(self, topic: str, video: CompressedVideoInfo, metadata: dict[str, Any]) -> TopicStatistics:
-        # This is all quite unstable and depends on the metadata being written correctly
-        video_stream_details_json = metadata["video_stream_details"]["data"]
-        video_stream_details = json.loads(video_stream_details_json)
-        topic_metadata = video_stream_details[topic]
-        duration_ms = topic_metadata["duration_ms"]
-        duration_ns = int(duration_ms * 1e6)
-        fps = topic_metadata["frame_rate"]
+    def _get_video_stats(
+        self, policy_key: str, video: CompressedVideoInfo, metadata: dict[str, Any]
+    ) -> TopicStatistics:
+        """Read a camera's duration and frame rate from the episode's video_stream_details metadata."""
+        dataset_topic = self.manifest.camera_for(policy_key).dataset_topic
+        try:
+            video_stream_details = json.loads(metadata["video_stream_details"]["data"])
+            topic_metadata = video_stream_details[dataset_topic]
+        except KeyError as exc:
+            raise ValueError(
+                f"Episode metadata has no video_stream_details for {dataset_topic} (camera {policy_key!r}); "
+                "the contract's camera topic does not match what data-processor encoded"
+            ) from exc
+
+        duration_ns = int(topic_metadata["duration_ms"] * 1e6)
 
         return TopicStatistics(
             message_count=1,
@@ -742,7 +374,7 @@ class LeRobotMCAPReader:
             last_message_time_ns=video.timestamp_ns + duration_ns,
             # We can't calculate gaps here, since we only have a video, not the individual frames
             gaps=[],
-            fps=fps,
+            fps=topic_metadata["frame_rate"],
         )
 
     def _find_gaps(self, timestamps: list[int], gap_ns: int) -> list[tuple[int, int]]:

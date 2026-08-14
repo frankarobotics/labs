@@ -1,3 +1,5 @@
+"""CORS configuration model, shared across the pipeline services."""
+
 import os
 from dataclasses import dataclass
 

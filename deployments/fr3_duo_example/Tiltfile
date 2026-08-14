@@ -41,39 +41,46 @@ common_build_args = {
     "BUILDKIT_INLINE_CACHE": "1",
 }
 
+
+def packages_context_custom_build(ref, context, dockerfile):
+    # Some pipeline services COPY --from=packages, a buildx *named* build context
+    # (services/pipeline/packages, shared by all pipeline services and declared in
+    # each service's own docker-compose.yml as `additional_contexts: packages`).
+    # Tilt's docker_build() can't declare named contexts, so it would resolve
+    # `packages` as an image ("docker.io/library/packages:latest") and fail the pull.
+    # custom_build lets us pass --build-context explicitly and still live_update.
+    build_arg_flags = ["--build-arg %s=%s" % (k, v) for k, v in common_build_args.items()]
+    custom_build(
+        ref=ref,
+        command=" ".join([
+            "docker build",
+            "--build-context packages=../../services/pipeline/packages",
+            ] + build_arg_flags + [
+            "--target " + common_build_args["BUILD_TARGET"],
+            "-f " + dockerfile,
+            "-t $EXPECTED_REF",
+            context,
+        ]),
+        deps=[context, "../../services/pipeline/packages"],
+        live_update=[
+            sync(context + "/src", "/workspace/src"),
+            # Restart the process to pick up the changed files.
+            restart_container(),
+        ],
+    )
+
+
 # Docker builds
-docker_build(
+packages_context_custom_build(
     ref="registry.localhost/labs/data-collection:latest",
     context="../../services/pipeline/data-collection",
     dockerfile="../../services/pipeline/data-collection/data-collection.dockerfile",
-    build_args=common_build_args,
-    target="dev",
-    cache_from="registry.localhost/labs/data-collection:latest",
-    live_update=[
-        sync(
-            "../../services/pipeline/data-collection/src",
-            "/workspace/src",
-        ),
-        # Restart the process to pick up the changed files.
-        restart_container(),
-    ],
 )
 
-docker_build(
+packages_context_custom_build(
     ref="registry.localhost/labs/data-recorder:latest",
     context="../../services/pipeline/data-recorder",
     dockerfile="../../services/pipeline/data-recorder/data-recorder.dockerfile",
-    build_args=common_build_args,
-    target="dev",
-    cache_from="registry.localhost/labs/data-recorder:latest",
-    live_update=[
-        sync(
-            "../../services/pipeline/data-recorder/src",
-            "/workspace/src",
-        ),
-        # Restart the process to pick up the changed files.
-        restart_container(),
-    ],
 )
 
 docker_build(
