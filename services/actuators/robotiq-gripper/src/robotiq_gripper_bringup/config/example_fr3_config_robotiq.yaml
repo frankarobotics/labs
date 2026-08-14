@@ -1,0 +1,4 @@
+robot1:
+  # You can find the port by running `ls /dev/serial/by-id/` in the terminal.
+  com_port: "/dev/serial/by-id/usb-FTDI_USB_TO_RS-485_********-if00-port0"
+  namespace: "gripper"

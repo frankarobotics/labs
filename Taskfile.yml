@@ -269,3 +269,27 @@ tasks:
             {{if .DRY_RUN}}--dry-run{{end}} \
             {{if .INCLUDE_FAILED}}--include-failed{{end}} \
             {{.CLI_ARGS}}
+
+  submodules-update:
+    desc: Update submodules
+    cmds:
+      # update and initialize all submodules at the top level
+      - git submodule update --init
+      # update and initialize submodules recursively in the robotiq-gripper submodule
+      - cd services/actuators/robotiq-gripper/src/third_party/robotiq_ros && git submodule update --init --recursive
+
+  submodules-deinit:
+    desc: Deinit submodules
+    cmds:
+      - git submodule deinit --all
+
+  submodules-deinit-force:
+    desc: Deinit submodules forcefully
+    cmds:
+      - git submodule deinit --all --force
+
+  submodules-reset:
+    desc: Reset submodules
+    cmds:
+      - task: submodules-deinit
+      - task: submodules-update

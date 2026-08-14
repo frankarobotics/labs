@@ -20,9 +20,9 @@ echo "source /workspace/src/install/setup.bash" >>~/.bashrc
 
 # Copy config file to the appropriate location before running this script so that ros2 launch command can find it.
 # Note that yml is also renamed to yaml
-cp -v /workspace/config_robotiq_gripper.yml /workspace/src/install/franka_gripper_manager/share/franka_gripper_manager/config/config_robotiq_gripper.yaml
+cp -v /workspace/config_robotiq_gripper.yml /workspace/src/install/robotiq_gripper_bringup/share/robotiq_gripper_bringup/config/config_robotiq_gripper.yaml
 
 # For debugging
 # sleep infinity
 
-ros2 launch franka_gripper_manager robotiq_gripper_controller_client.launch.py config_file:=config_robotiq_gripper.yaml
+ros2 launch robotiq_gripper_bringup robotiq_gripper_controller_client.launch.py config_file:=config_robotiq_gripper.yaml use_fake_hardware:="${FAKE_HARDWARE:-false}"

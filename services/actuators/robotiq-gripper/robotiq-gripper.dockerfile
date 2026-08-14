@@ -8,7 +8,7 @@ RUN apt-get update && \
     ros-jazzy-cyclonedds \
     python3-rosdep \
     git \
-    python3-vcstool \
+    libserialport-dev \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     rosdep init || true
@@ -19,23 +19,25 @@ ENV PYTHONPATH="/opt/ros/jazzy/lib/python3.12/site-packages:${PYTHONPATH}:/works
 
 SHELL ["/bin/bash", "-c"]
 
-# Clone robotiq gripper and import dependencies
-ARG ROS2_ROBOTIQ_GRIPPER_COMMIT_HASH="3b6cf8ff9106384e72c23de7d3ba989fb6b41141"
-RUN mkdir -p /workspace/src/third_party && \
-    cd /workspace/src/third_party && \
-    git clone https://github.com/PickNikRobotics/ros2_robotiq_gripper.git && \
-    cd ros2_robotiq_gripper && git checkout ${ROS2_ROBOTIQ_GRIPPER_COMMIT_HASH} && cd .. && \
-    sed -i 's/kGripperMaxSpeed = 0.150;/kGripperMaxSpeed = 1.0;/g' ros2_robotiq_gripper/robotiq_driver/src/hardware_interface.cpp && \
-    vcs import . --input ros2_robotiq_gripper/ros2_robotiq_gripper.rolling.repos
+# Official Robotiq ROS 2 driver (robotiq/ros, provided as git submodule under src/third_party).
+# robotiq_driver's CMake pulls in the gripper SDK via add_subdirectory(../../extern/grippers/sdk_cpp),
+# so grippers/ and extern/ must remain siblings here.
+# robotiq_tsf and the tactile sensor SDK are excluded (force sensitive fingertips are not supported).
+COPY src/third_party/robotiq_ros/grippers /workspace/src/third_party/robotiq_ros/grippers
+COPY src/third_party/robotiq_ros/extern/grippers/sdk_cpp /workspace/src/third_party/robotiq_ros/extern/grippers/sdk_cpp
+RUN touch /workspace/src/third_party/robotiq_ros/extern/grippers/sdk_cpp/COLCON_IGNORE
 
-# Install dependencies and build third-party packages
+# Install dependencies and build the gripper packages (driver, controllers, description).
+# robotiq_driver must be listed explicitly: it provides the hardware interface plugin but
+# is not a package.xml dependency of the other two, so --packages-up-to would skip it.
+# libserialport has no rosdep key and is installed above, hence the skip key.
 RUN apt-get update && \
     rosdep update && \
-    rosdep install --from-paths /workspace/src/third_party --ignore-src -r -y && \
+    rosdep install --from-paths /workspace/src/third_party --ignore-src -r -y --skip-keys libserialport && \
     rm -rf /var/lib/apt/lists/* && \
     source /opt/ros/jazzy/setup.bash && \
     cd /workspace/src && \
-    colcon build --symlink-install
+    colcon build --symlink-install --packages-up-to robotiq_driver robotiq_controllers robotiq_description
 
 ####################################################################################################
 # Stage: dev
@@ -51,11 +53,11 @@ RUN apt-get update && \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Build franka_gripper_manager
-COPY src/third_party/gello_software/ros2 /workspace/src/third_party/gello_software/ros2
+# Build robotiq_gripper_bringup
+COPY src/robotiq_gripper_bringup /workspace/src/robotiq_gripper_bringup
 RUN cd /workspace/src/ && \
     source /opt/ros/jazzy/setup.bash && \
-    colcon build --packages-select franka_gripper_manager
+    colcon build --packages-select robotiq_gripper_bringup
 
 COPY entrypoint.sh entrypoint.sh
 
@@ -82,11 +84,11 @@ CMD ["./entrypoint.sh"]
 # Stage: prod
 FROM base AS prod
 
-# Build franka_gripper_manager
-COPY src/third_party/gello_software/ros2 /workspace/src/third_party/gello_software/ros2
+# Build robotiq_gripper_bringup
+COPY src/robotiq_gripper_bringup /workspace/src/robotiq_gripper_bringup
 RUN cd /workspace/src/ && \
     source /opt/ros/jazzy/setup.bash && \
-    colcon build --packages-select franka_gripper_manager
+    colcon build --packages-select robotiq_gripper_bringup
 
 COPY entrypoint.sh entrypoint.sh
 
