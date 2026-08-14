@@ -26,6 +26,12 @@
   5. All previously recorded episode metadata stored in the database will be lost after removal. Existing episode files
      on disk remain untouched.
 
+- **Breaking Change:** Switched the `robotiq-gripper` service to the officially supported [robotiq/ros](https://github.com/robotiq/ros)
+  driver. The ROS interface stayed the same but you have to initialize the new submodule before the builds correctly.
+
+  **Upgrade steps** (Add new submodule):
+  - Run `task update-submodules` at the top level
+
 - Removed deprecated episode fields `shipped` / `EpisodeShipped`, `object_url`, `episode_metadata_version` from episode
   models across all pipeline services.
 - Removed deprecated record fields `output_path`, `metadata_path`, `recording_path`, `record_metadata_version`,

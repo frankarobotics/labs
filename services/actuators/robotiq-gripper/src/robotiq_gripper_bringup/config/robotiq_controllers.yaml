@@ -1,0 +1,37 @@
+/**:
+  controller_manager:
+    ros__parameters:
+      update_rate: 500  # Hz
+      # Note: no publish_topic override — the broadcaster must keep its default
+      # topic "joint_states" (in the gripper namespace), which data-recorder and
+      # the station observer subscribe to.
+      joint_state_broadcaster:
+        type: joint_state_broadcaster/JointStateBroadcaster
+      # Jazzy: parallel_gripper_action_controller replaces position_controllers/GripperActionController
+      robotiq_gripper_controller:
+        type: parallel_gripper_action_controller/GripperActionController
+      robotiq_activation_controller:
+        type: robotiq_controllers/RobotiqActivationController
+
+/**:
+  robotiq_gripper_controller:
+    ros__parameters:
+      joint: robotiq_85_left_knuckle_joint
+      # Effort interface (replaces use_effort_interface); 235 N full scale
+      # preserves the previous max_effort = 1.0 (100%) behavior
+      max_effort_interface: "robotiq_85_left_knuckle_joint/set_gripper_max_effort"
+      max_effort: 235.0
+      # Velocity interface (replaces use_speed_interface); 1.0 m/s with
+      # gripper_max_speed = 1.0 in the URDF preserves the previous full-speed
+      # behavior (old kGripperMaxSpeed source patch)
+      max_velocity_interface: "robotiq_85_left_knuckle_joint/set_gripper_max_velocity"
+      max_velocity: 1.0
+      state_interfaces: ["position", "velocity"]
+      allow_stalling: true
+      stall_timeout: 0.05
+      goal_tolerance: 0.02
+
+/**:
+  robotiq_activation_controller:
+    ros__parameters:
+      default: true

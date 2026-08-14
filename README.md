@@ -129,8 +129,8 @@ This project uses two key tools to simplify development and deployment:
 ./bootstrap.sh && bash
 task install:dependencies
 
-# Initialize submodules for third party services
-git submodule update --init
+# Initialize or update submodules for third party services
+task update-submodules
 
 # Switch into your station folder and edit configs to match your hardware layout
 cd deployments/fr3_duo_example
