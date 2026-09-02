@@ -14,11 +14,13 @@
 
 #pragma once
 
+#include <atomic>
 #include <controller_manager_msgs/srv/list_controllers.hpp>
 #include <controller_manager_msgs/srv/list_hardware_components.hpp>
 #include <controller_manager_msgs/srv/set_hardware_component_state.hpp>
 #include <controller_manager_msgs/srv/switch_controller.hpp>
 #include <franka_msgs/action/error_recovery.hpp>
+#include <franka_msgs/msg/franka_robot_state.hpp>
 #include <lifecycle_msgs/msg/state.hpp>
 #include <memory>
 #include <mutex>
@@ -79,6 +81,7 @@ class FrankaControllerCoordinator : public rclcpp::Node {
   // Used as the default value when declaring ROS parameters and as fallback initialisers.
   static constexpr std::chrono::milliseconds kDefaultServiceTimeout{5000};
   static constexpr std::chrono::milliseconds kDefaultAutorecoveryTimeout{30000};
+  static constexpr std::chrono::milliseconds kDefaultRobotStateStaleTimeout{20};
 
   // --- Fixed timeouts (not ROS-configurable) ---
   // Single list_controllers call timeout when polling for a controller to appear.
@@ -88,7 +91,13 @@ class FrankaControllerCoordinator : public rclcpp::Node {
   // Single-call timeout used to probe whether the controller manager is reachable or if the hardware interface is active.
   static constexpr std::chrono::milliseconds kProbeTimeout{200};
   // Hardware-level timeout forwarded to the switch_controller service request.
-  static constexpr std::chrono::milliseconds kSwitchControllerHardwareTimeout{5000};
+  static constexpr std::chrono::milliseconds kSwitchControllerHardwareTimeout{10000};
+  // Extra margin added on top of kSwitchControllerHardwareTimeout for our own client-side wait.
+  static constexpr std::chrono::milliseconds kSwitchControllerResponseMargin{2000};
+  // Floor for the robot_state monitor timer period, derived from kDefaultRobotStateStaleTimeout.
+  static constexpr std::chrono::milliseconds kMinRobotStateMonitorPeriod{1};
+  // Cooldown after a failed autorecovery step before retrying.
+  static constexpr std::chrono::milliseconds kAutorecoveryRetryBackoff{1000};
 
   explicit FrankaControllerCoordinator(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
   virtual ~FrankaControllerCoordinator();
@@ -132,12 +141,15 @@ class FrankaControllerCoordinator : public rclcpp::Node {
     std::chrono::milliseconds probe_timeout = kProbeTimeout
   );
   void monitor_operating_controller();
+  void check_robot_state_staleness();
   void on_controller_state_received(const std_msgs::msg::String& msg);
 
   void declare_parameters();
   void initialize_service_clients();
   void initialize_service_servers();
   void initialize_controller_state_subscriber();
+  void initialize_robot_state_subscriber();
+  void on_robot_state_received(const franka_msgs::msg::FrankaRobotState& msg);
   void publish_state();
 
   CoordinatorState current_state_;
@@ -146,6 +158,7 @@ class FrankaControllerCoordinator : public rclcpp::Node {
   std::string controller_manager_namespace_;
   double monitor_rate_hz_;
   std::chrono::milliseconds service_timeout_;
+  std::chrono::milliseconds robot_state_stale_timeout_ms_{kDefaultRobotStateStaleTimeout};
 
   rclcpp::Client<controller_manager_msgs::srv::SwitchController>::SharedPtr
       switch_controller_client_;
@@ -163,12 +176,20 @@ class FrankaControllerCoordinator : public rclcpp::Node {
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr state_publisher_;
   rclcpp::TimerBase::SharedPtr controller_monitor_timer_;
   rclcpp::TimerBase::SharedPtr state_publish_timer_;
+  rclcpp::TimerBase::SharedPtr robot_state_monitor_timer_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr controller_state_subscriber_;
+  rclcpp::Subscription<franka_msgs::msg::FrankaRobotState>::SharedPtr robot_state_subscriber_;
   std::string last_controller_state_;
+  // 0 if no robot_state message has been received since the last (re)activation.
+  std::atomic<int64_t> last_robot_state_ns_{0};
   std::optional<std::chrono::steady_clock::time_point> autorecovery_started_;
+  std::chrono::steady_clock::time_point autorecovery_retry_not_before_;
+  // Set when AUTORECOVERY was entered on the staleness-based guess
+  bool autorecovery_pending_hardware_deactivation_ = false;
   std::chrono::milliseconds autorecovery_timeout_{kDefaultAutorecoveryTimeout};
   rclcpp::CallbackGroup::SharedPtr client_callback_group_;
   rclcpp::CallbackGroup::SharedPtr service_callback_group_;
+  rclcpp::CallbackGroup::SharedPtr robot_state_callback_group_;
   mutable std::mutex state_mutex_;
 };
 

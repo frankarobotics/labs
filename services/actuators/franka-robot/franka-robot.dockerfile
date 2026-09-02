@@ -31,7 +31,7 @@ SHELL ["/bin/bash", "-c"]
 # Clone and build franka_ros2 and its dependencies 
 RUN mkdir -p /workspace/src/third_party && \
     cd /workspace/src/third_party && \
-    git clone https://github.com/frankaemika/franka_ros2.git -b v3.4.0 && \
+    git clone https://github.com/frankaemika/franka_ros2.git -b v3.5.3 && \
     vcs import < franka_ros2/dependency.repos && \
     find . -name ".git" -type d -execdir git submodule update --init --recursive \;
 

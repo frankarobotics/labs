@@ -49,6 +49,8 @@
   during `READY`, `SYNCING`, or `FOLLOWING`, the coordinator attempts to clear robot errors, re-activate the hardware
   interface and the ready controller, then returns to `READY`, falling back to `IDLE` on failure. The workflow mirrors
   this across all coordinators. A toast notification is shown in the UI during recovery.
+- The controller coordinator now detects reflex errors within ~20ms via a dedicated `robot_state` staleness monitor,
+  instead of relying solely on the hardware interface, which can take up to ~2 seconds to reflect a reflex.
 - Recording can now only be started while the workflow is in `FOLLOWING`, and any active recording is automatically
   stopped (moved to review) when the workflow leaves `FOLLOWING`.
 - Reduced device status poll interval to 0.5s, so the system status UI reflects device changes faster.
