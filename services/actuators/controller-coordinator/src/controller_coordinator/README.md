@@ -11,14 +11,15 @@ modes.
   configuration before proceeding to data collection, inference, etc.)
 - **Syncing**: Operating controller active, moving to start position
 - **Following**: Operating controller active, following target joint states
-- **Autorecovery**: A controller died unexpectedly; the coordinator attempts to re-activate the ready controller,
-  transitioning to **Ready** on success or **Idle** on failure
+- **Autorecovery**: A reflex or unexpected controller failure was detected; the coordinator attempts to re-activate the
+  ready controller, transitioning to **Ready** on success or **Idle** on failure
 
 The transition from Syncing to Following happens automatically when the operating controller reports that syncing is
 complete (via its `~/state` topic).
 
-Autorecovery is entered automatically when a controller dies in `Ready`, `Syncing`, or `Following`. It can also be
-requested externally via the `start_autorecovery` service.
+Autorecovery is entered automatically when a reflex is detected via the robot state topic, or when a controller becomes
+inactive or the hardware interface deactivates in `Ready`, `Syncing`, or `Following`. It can also be requested
+externally via the `start_autorecovery` service.
 
 ## Launch
 

@@ -43,11 +43,14 @@ FrankaControllerCoordinator::FrankaControllerCoordinator(const rclcpp::NodeOptio
       this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
   service_callback_group_ =
       this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+  robot_state_callback_group_ =
+      this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
   declare_parameters();
   initialize_service_clients();
   initialize_service_servers();
   initialize_controller_state_subscriber();
+  initialize_robot_state_subscriber();
 
   auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).transient_local();
   state_publisher_ = this->create_publisher<std_msgs::msg::String>("~/state", qos);
@@ -60,6 +63,13 @@ FrankaControllerCoordinator::FrankaControllerCoordinator(const rclcpp::NodeOptio
       std::chrono::duration<double>(1.0 / monitor_rate_hz_),
       std::bind(&FrankaControllerCoordinator::publish_state, this));
 
+  auto robot_state_monitor_period =
+      std::max(kMinRobotStateMonitorPeriod, robot_state_stale_timeout_ms_ / 2);
+  robot_state_monitor_timer_ = this->create_wall_timer(
+      robot_state_monitor_period,
+      std::bind(&FrankaControllerCoordinator::check_robot_state_staleness, this),
+      robot_state_callback_group_);
+
   publish_state();
   RCLCPP_INFO(this->get_logger(), "Franka Controller Coordinator initialized in IDLE state");
 }
@@ -70,6 +80,9 @@ FrankaControllerCoordinator::~FrankaControllerCoordinator() {
   }
   if (state_publish_timer_) {
     state_publish_timer_->cancel();
+  }
+  if (robot_state_monitor_timer_) {
+    robot_state_monitor_timer_->cancel();
   }
   transition_to_idle();
   RCLCPP_INFO(this->get_logger(), "Franka Controller Coordinator shutting down");
@@ -88,6 +101,8 @@ void FrankaControllerCoordinator::declare_parameters() {
                            static_cast<int>(kDefaultServiceTimeout.count()));
   this->declare_parameter("autorecovery_timeout_ms",
                            static_cast<int>(kDefaultAutorecoveryTimeout.count()));
+  this->declare_parameter("robot_state_stale_timeout_ms",
+                           static_cast<int>(kDefaultRobotStateStaleTimeout.count()));
 
   ready_controller_name_ = this->get_parameter("ready_controller").as_string();
   operating_controller_name_ = this->get_parameter("operating_controller").as_string();
@@ -96,11 +111,15 @@ void FrankaControllerCoordinator::declare_parameters() {
   service_timeout_ = std::chrono::milliseconds(this->get_parameter("service_timeout_ms").as_int());
   autorecovery_timeout_ =
       std::chrono::milliseconds(this->get_parameter("autorecovery_timeout_ms").as_int());
+  robot_state_stale_timeout_ms_ =
+      std::chrono::milliseconds(this->get_parameter("robot_state_stale_timeout_ms").as_int());
 
   RCLCPP_INFO(this->get_logger(), "Controller manager namespace: %s", controller_manager_namespace_.c_str());
   RCLCPP_INFO(this->get_logger(), "Ready controller: %s", ready_controller_name_.c_str());
   RCLCPP_INFO(this->get_logger(), "Operating controller: %s", operating_controller_name_.c_str());
   RCLCPP_INFO(this->get_logger(), "Autorecovery timeout: %ld ms", autorecovery_timeout_.count());
+  RCLCPP_INFO(this->get_logger(), "Robot state stale timeout: %ld ms",
+              robot_state_stale_timeout_ms_.count());
 }
 
 void FrankaControllerCoordinator::initialize_service_clients() {
@@ -132,9 +151,7 @@ void FrankaControllerCoordinator::initialize_service_clients() {
           set_hardware_component_state_service, rmw_qos_profile_services_default,
           client_callback_group_);
 
-  std::string ns = this->get_namespace();
-  std::string error_recovery_action =
-      (ns == "/" ? "" : ns) + "/action_server/error_recovery";
+  std::string error_recovery_action = "action_server/error_recovery";
   error_recovery_client_ =
       rclcpp_action::create_client<franka_msgs::action::ErrorRecovery>(
           this, error_recovery_action, client_callback_group_);
@@ -172,9 +189,7 @@ void FrankaControllerCoordinator::initialize_service_servers() {
 }
 
 void FrankaControllerCoordinator::initialize_controller_state_subscriber() {
-  std::string ns = this->get_namespace();
-  std::string controller_state_topic =
-      (ns == "/" ? "" : ns) + "/" + operating_controller_name_ + "/state";
+  std::string controller_state_topic = operating_controller_name_ + "/state";
 
   auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).transient_local();
   controller_state_subscriber_ = this->create_subscription<std_msgs::msg::String>(
@@ -182,6 +197,47 @@ void FrankaControllerCoordinator::initialize_controller_state_subscriber() {
       std::bind(&FrankaControllerCoordinator::on_controller_state_received, this, std::placeholders::_1));
 
   RCLCPP_INFO(this->get_logger(), "Subscribed to sync state topic: %s", controller_state_topic.c_str());
+}
+
+void FrankaControllerCoordinator::initialize_robot_state_subscriber() {
+  std::string robot_state_topic = "franka_robot_state_broadcaster/robot_state";
+
+  rclcpp::SubscriptionOptions opts;
+  opts.callback_group = robot_state_callback_group_;
+  robot_state_subscriber_ = this->create_subscription<franka_msgs::msg::FrankaRobotState>(
+      robot_state_topic, rclcpp::SystemDefaultsQoS(),
+      std::bind(&FrankaControllerCoordinator::on_robot_state_received, this,
+                std::placeholders::_1),
+      opts);
+
+  RCLCPP_INFO(this->get_logger(), "Subscribed to robot state topic: %s", robot_state_topic.c_str());
+}
+
+void FrankaControllerCoordinator::on_robot_state_received(
+    const franka_msgs::msg::FrankaRobotState& msg) {
+  last_robot_state_ns_.store(std::chrono::steady_clock::now().time_since_epoch().count(),
+                             std::memory_order_relaxed);
+
+  if (msg.robot_mode != franka_msgs::msg::FrankaRobotState::ROBOT_MODE_REFLEX) {
+    return;
+  }
+
+  std::lock_guard<std::mutex> lock(state_mutex_);
+  if (current_state_ != CoordinatorState::READY &&
+      current_state_ != CoordinatorState::SYNCING &&
+      current_state_ != CoordinatorState::FOLLOWING) {
+    return;
+  }
+
+  RCLCPP_WARN(this->get_logger(),
+              "Reflex detected via robot state, entering AUTORECOVERY from %s",
+              to_string(current_state_).c_str());
+  autorecovery_started_ = std::chrono::steady_clock::now();
+  autorecovery_retry_not_before_ = std::chrono::steady_clock::time_point{};
+  autorecovery_pending_hardware_deactivation_ = false;
+  current_state_ = CoordinatorState::AUTORECOVERY;
+  last_robot_state_ns_.store(0, std::memory_order_relaxed);
+  publish_state();
 }
 
 void FrankaControllerCoordinator::publish_state() {
@@ -244,7 +300,10 @@ void FrankaControllerCoordinator::handle_start_autorecovery(
   RCLCPP_INFO(this->get_logger(), "autorecover requested from %s, entering AUTORECOVERY",
               to_string(current_state_).c_str());
   autorecovery_started_ = std::chrono::steady_clock::now();
+  autorecovery_retry_not_before_ = std::chrono::steady_clock::time_point{};
+  autorecovery_pending_hardware_deactivation_ = false;
   current_state_ = CoordinatorState::AUTORECOVERY;
+  last_robot_state_ns_.store(0, std::memory_order_relaxed);
   publish_state();
   response->success = true;
   response->message = "Entered AUTORECOVERY state";
@@ -376,6 +435,7 @@ bool FrankaControllerCoordinator::transition_to_idle() {
   }
 
   current_state_ = CoordinatorState::IDLE;
+  last_robot_state_ns_.store(0, std::memory_order_relaxed);
   publish_state();
   lock.unlock();
 
@@ -432,7 +492,11 @@ bool FrankaControllerCoordinator::switch_controllers(
 
   auto future = switch_controller_client_->async_send_request(request);
 
-  if (future.wait_for(service_timeout_) != std::future_status::ready) {
+  // Wait at least as long as the server-side hardware timeout embedded above, plus a margin, so we
+  // don't declare a timeout for a request the server is still legitimately working on.
+  auto client_wait_timeout =
+      std::max(service_timeout_, kSwitchControllerHardwareTimeout + kSwitchControllerResponseMargin);
+  if (future.wait_for(client_wait_timeout) != std::future_status::ready) {
     RCLCPP_ERROR(this->get_logger(), "Switch controller service call timed out");
     return false;
   }
@@ -515,6 +579,9 @@ void FrankaControllerCoordinator::monitor_autorecovery_cycle() {
     transition_to_idle();
     return;
   }
+  if (std::chrono::steady_clock::now() < autorecovery_retry_not_before_) {
+    return;  // Still cooling down from a previous failed attempt.
+  }
   if (!is_controller_manager_available()) {
     RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
                          "Autorecovery: waiting for controller manager to become available...");
@@ -523,29 +590,44 @@ void FrankaControllerCoordinator::monitor_autorecovery_cycle() {
   RCLCPP_INFO(this->get_logger(),
               "Autorecovery: controller manager is available, attempting recovery");
 
+  // The staleness check only guesses that a reflex occurred, while the franka_hardware_interface
+  // may still be blocked handling it. We need to wait until the hardware interface actually
+  // reports inactive before continuing autorecovery.
+  if (autorecovery_pending_hardware_deactivation_) {
+    if (is_hardware_interface_active()) {
+      RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                           "Autorecovery: waiting for hardware interface to report inactive "
+                           "before proceeding...");
+      return;
+    }
+    autorecovery_pending_hardware_deactivation_ = false;
+  }
+
   RCLCPP_INFO(this->get_logger(),
               "Autorecovery: Clearing robot error ...");
 
   if (!clear_robot_error()) {
-    RCLCPP_ERROR(this->get_logger(), "Autorecovery: failed to clear robot error, transitioning to IDLE");
-    transition_to_idle();
+    RCLCPP_WARN(this->get_logger(),
+                "Autorecovery: failed to clear robot error, will retry on next monitor cycle");
+    autorecovery_retry_not_before_ = std::chrono::steady_clock::now() + kAutorecoveryRetryBackoff;
     return;
   }
 
   RCLCPP_INFO(this->get_logger(),
               "Autorecovery: Reactivating hardware interface if not active ...");
-  
-  bool reactivated = reactivate_hardware_interface();
-  if (!reactivated) {
-    RCLCPP_ERROR(this->get_logger(), "Autorecovery: failed to reactivate hardware interface, transitioning to IDLE");
-    transition_to_idle();
+
+  if (!reactivate_hardware_interface()) {
+    RCLCPP_WARN(this->get_logger(),
+                "Autorecovery: failed to reactivate hardware interface, will retry on next monitor cycle");
+    autorecovery_retry_not_before_ = std::chrono::steady_clock::now() + kAutorecoveryRetryBackoff;
+    return;
   }
 
   RCLCPP_INFO(this->get_logger(), "Autorecovery: hardware interface is active, attempting to recover");
 
   if (!transition_autorecovery_to_ready()) {
-    RCLCPP_ERROR(this->get_logger(), "Autorecovery failed, transitioning to IDLE");
-    transition_to_idle();
+    RCLCPP_WARN(this->get_logger(), "Autorecovery: attempt failed, will retry on next monitor cycle");
+    autorecovery_retry_not_before_ = std::chrono::steady_clock::now() + kAutorecoveryRetryBackoff;
   }
 }
 
@@ -672,6 +754,48 @@ bool FrankaControllerCoordinator::reactivate_hardware_interface(std::chrono::mil
   return all_ok;
 }
 
+void FrankaControllerCoordinator::check_robot_state_staleness() {
+  CoordinatorState state;
+  {
+    std::unique_lock<std::mutex> lock(state_mutex_, std::try_to_lock);
+    if (!lock.owns_lock()) {
+      return;
+    }
+    state = current_state_;
+  }
+
+  if (state != CoordinatorState::READY && state != CoordinatorState::SYNCING &&
+      state != CoordinatorState::FOLLOWING) {
+    return;
+  }
+
+  int64_t last_ns = last_robot_state_ns_.load(std::memory_order_relaxed);
+  if (last_ns == 0) {
+    return;  // Grace period — no message received yet since the last (re)activation.
+  }
+
+  int64_t now_ns = std::chrono::steady_clock::now().time_since_epoch().count();
+  auto elapsed = std::chrono::nanoseconds(now_ns - last_ns);
+  if (elapsed <= robot_state_stale_timeout_ms_) {
+    return;
+  }
+
+  std::lock_guard<std::mutex> lock(state_mutex_);
+  if (current_state_ != state) {
+    return;
+  }
+  RCLCPP_WARN(this->get_logger(),
+              "No robot_state update for over %ld ms, assuming reflex (workaround for known "
+              "libfranka/franka_ros2 read() blocking bug), entering AUTORECOVERY (from %s)",
+              robot_state_stale_timeout_ms_.count(), to_string(state).c_str());
+  autorecovery_started_ = std::chrono::steady_clock::now();
+  autorecovery_retry_not_before_ = std::chrono::steady_clock::time_point{};
+  autorecovery_pending_hardware_deactivation_ = true;
+  current_state_ = CoordinatorState::AUTORECOVERY;
+  last_robot_state_ns_.store(0, std::memory_order_relaxed);
+  publish_state();
+}
+
 void FrankaControllerCoordinator::monitor_operating_controller() {
   // Snapshot state without blocking. If a transition holds the lock, skip this
   // cycle — the next one (100 ms later) will see the completed state.
@@ -695,18 +819,22 @@ void FrankaControllerCoordinator::monitor_operating_controller() {
     return;
   }
 
-  // When the Controller Manager becomes unavailable, we enter AUTORECOVERY. The next monitor cycles will
-  // check if it has come back up and attempt to recover back to READY or time out and drop to IDLE.
+  // When the Controller Manager becomes unavailable or the hardware interface deactivates, enter
+  // AUTORECOVERY. Note: a reflex is detected faster via on_robot_state_received(); this check is a
+  // fallback for other causes of hardware deactivation (e.g. controller manager restart).
   if (!is_controller_manager_available() || !is_hardware_interface_active()) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     if (current_state_ != state) {
       return;
     }
     RCLCPP_WARN(this->get_logger(),
-                "Controller manager unavailable, entering AUTORECOVERY (from %s)",
+                "Controller manager unavailable or hardware interface inactive, entering AUTORECOVERY (from %s)",
                 to_string(state).c_str());
     autorecovery_started_ = std::chrono::steady_clock::now();
+    autorecovery_retry_not_before_ = std::chrono::steady_clock::time_point{};
+    autorecovery_pending_hardware_deactivation_ = false;
     current_state_ = CoordinatorState::AUTORECOVERY;
+    last_robot_state_ns_.store(0, std::memory_order_relaxed);
     publish_state();
     return;
   }
@@ -739,7 +867,10 @@ void FrankaControllerCoordinator::monitor_operating_controller() {
                 "Controller '%s' is not active, entering AUTORECOVERY (from %s)",
                 controller_to_check.c_str(), to_string(state).c_str());
     autorecovery_started_ = std::chrono::steady_clock::now();
+    autorecovery_retry_not_before_ = std::chrono::steady_clock::time_point{};
+    autorecovery_pending_hardware_deactivation_ = false;
     current_state_ = CoordinatorState::AUTORECOVERY;
+    last_robot_state_ns_.store(0, std::memory_order_relaxed);
     publish_state();
   }
 
