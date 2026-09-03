@@ -370,7 +370,6 @@ wheels = [
 
 [[package]]
 name = "zed-camera"
-version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "numpy" },

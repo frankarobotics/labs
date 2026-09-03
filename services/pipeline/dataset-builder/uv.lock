@@ -101,7 +101,6 @@ wheels = [
 
 [[package]]
 name = "dataset-builder"
-version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "ffmpeg-python" },

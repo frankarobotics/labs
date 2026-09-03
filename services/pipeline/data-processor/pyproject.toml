@@ -1,7 +1,7 @@
 [project]
 name = "data-processor"
-version = "0.1.0"
 description = "Data Processor"
+dynamic = ["version"]
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12"

@@ -56,5 +56,5 @@ RIGHT:
 - `namespace`: ROS 2 namespace for topic isolation.
 - `FAKE_HARDWARE` (env var): Enable fake hardware mode (`use_fake_hardware` ros2_control mock) for bringup testing
   without a physical device (default `false`). Known limitation (inherited from the upstream driver): the mock hardware
-  exports no effort/velocity command interfaces, so the `gripper_cmd` action controller cannot drive the gripper in
-  this mode.
+  exports no effort/velocity command interfaces, so the `gripper_cmd` action controller cannot drive the gripper in this
+  mode.

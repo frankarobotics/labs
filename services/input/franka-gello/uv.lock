@@ -224,7 +224,6 @@ wheels = [
 
 [[package]]
 name = "franka-gello"
-version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "dynamixel-sdk" },

@@ -128,25 +128,25 @@ usage: main.py [-h] [--verbose] [--format {lerobot}]
 
 ## Key flags
 
-| Flag                | Default                                           | Description                                                      |
-| ------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
-| `--dataset-name`    | _(required)_                                      | Dataset name                                                     |
-| `--output`          | `/workspace/data/datasets/lerobot/<dataset-name>` | Output directory (derived from `--dataset-name` when omitted)    |
-| `--format`          | `lerobot`                                         | Target dataset format                                            |
-| `--fps`             | contract's `policy.control_rate_hz`               | Override the resampling target                                   |
-| `--deployment-dir`  | `/workspace/deployments/fr3_duo_example`          | Resolves policy contract path automatically                      |
-| `--policy-type`     | `gr00t`                                           | Policy model the contract targets                                |
-| `--policy-contract` | `<deployment-dir>/config_contract_<policy-type>.yml` | Override the policy contract path (required input)            |
-| `--input`           | —                                                 | Explicit MCAP path (repeatable, mutually exclusive with filters) |
-| `--episodes-dir`    | `/workspace/data/processed_episodes`              | Root of the processed episodes tree                              |
-| `--from`            | —                                                 | Include episodes on or after this date (inclusive)               |
-| `--to`              | —                                                 | Include episodes on or before this date (inclusive)              |
-| `--task`            | —                                                 | Substring match on task description (repeatable)                 |
-| `--episode-id`      | —                                                 | Include specific episode UUID (repeatable)                       |
-| `--exclude-id`      | —                                                 | Exclude specific episode UUID (repeatable)                       |
-| `--limit`           | —                                                 | Max episodes to include                                          |
-| `--include-failed`  | —                                                 | Include failed episodes                                          |
-| `--dry-run`         | —                                                 | Preview matched episodes without converting                      |
+| Flag                | Default                                              | Description                                                      |
+| ------------------- | ---------------------------------------------------- | ---------------------------------------------------------------- |
+| `--dataset-name`    | _(required)_                                         | Dataset name                                                     |
+| `--output`          | `/workspace/data/datasets/lerobot/<dataset-name>`    | Output directory (derived from `--dataset-name` when omitted)    |
+| `--format`          | `lerobot`                                            | Target dataset format                                            |
+| `--fps`             | contract's `policy.control_rate_hz`                  | Override the resampling target                                   |
+| `--deployment-dir`  | `/workspace/deployments/fr3_duo_example`             | Resolves policy contract path automatically                      |
+| `--policy-type`     | `gr00t`                                              | Policy model the contract targets                                |
+| `--policy-contract` | `<deployment-dir>/config_contract_<policy-type>.yml` | Override the policy contract path (required input)               |
+| `--input`           | —                                                    | Explicit MCAP path (repeatable, mutually exclusive with filters) |
+| `--episodes-dir`    | `/workspace/data/processed_episodes`                 | Root of the processed episodes tree                              |
+| `--from`            | —                                                    | Include episodes on or after this date (inclusive)               |
+| `--to`              | —                                                    | Include episodes on or before this date (inclusive)              |
+| `--task`            | —                                                    | Substring match on task description (repeatable)                 |
+| `--episode-id`      | —                                                    | Include specific episode UUID (repeatable)                       |
+| `--exclude-id`      | —                                                    | Exclude specific episode UUID (repeatable)                       |
+| `--limit`           | —                                                    | Max episodes to include                                          |
+| `--include-failed`  | —                                                    | Include failed episodes                                          |
+| `--dry-run`         | —                                                    | Preview matched episodes without converting                      |
 
 ## Task reference
 
