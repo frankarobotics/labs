@@ -19,7 +19,7 @@ SHELL ["/bin/bash", "-c"]
 RUN mkdir -p /workspace/src/third_party && \
     cd /workspace/src/third_party && \
     git clone --depth 1 --filter=blob:none --sparse \
-        https://github.com/frankaemika/franka_ros2.git -b v3.4.0 && \
+        https://github.com/frankarobotics/franka_ros2.git -b v3.5.3 && \
     cd franka_ros2 && \
     git sparse-checkout set franka_msgs
 

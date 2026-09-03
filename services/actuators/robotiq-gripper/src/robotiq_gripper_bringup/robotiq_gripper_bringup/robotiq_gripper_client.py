@@ -28,7 +28,9 @@ class RobotiqGripperClient(Node):
             self.gripper_state_callback,
             10,
         )
-        self.action_client = ActionClient(self, ParallelGripperCommand, DEFAULT_MOVE_ACTION_TOPIC)
+        self.action_client = ActionClient(
+            self, ParallelGripperCommand, DEFAULT_MOVE_ACTION_TOPIC
+        )
         self.action_client.wait_for_server()
         self.last_width = -1.0
         self.get_logger().info("Gripper action server is up and running")

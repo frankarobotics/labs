@@ -1,7 +1,7 @@
 [project]
 name = "data_collection"
-version = "0.1.0"
 description = "Data Collection Service"
+dynamic = ["version"]
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12"

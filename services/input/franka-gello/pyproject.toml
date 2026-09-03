@@ -1,7 +1,7 @@
 [project]
 name = "franka_gello"
-version = "0.1.0"
 description = "Franka GELLO"
+dynamic = ["version"]
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"

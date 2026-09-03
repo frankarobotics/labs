@@ -1,7 +1,7 @@
 [project]
 name = "zed-camera"
-version = "0.1.0"
 description = "Zed Camera Service"
+dynamic = ["version"]
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12"
