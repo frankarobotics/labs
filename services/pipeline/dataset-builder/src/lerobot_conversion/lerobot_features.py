@@ -1,16 +1,9 @@
 """Translation of a policy contract into the LeRobot metadata it describes: info.json features and modality.json."""
 
-from typing import Any
-
-from lerobot.datasets.utils import DEFAULT_FEATURES  # type: ignore[import-not-found]
 from pipeline_configs import PolicyContract, PolicySegment
 
-from lerobot_conversion.lerobot_utils import (
-    get_annotation_feature_name,
-    get_observation_state_feature_name,
-    get_video_feature_name,
-)
-from models.feature import Feature, VideoFeature
+from lerobot_conversion.lerobot_utils import get_annotation_feature_name, get_observation_state_feature_name
+from models.feature import Feature
 from models.modality_config import (
     ActionSegment,
     AnnotationEntry,
@@ -20,28 +13,20 @@ from models.modality_config import (
 )
 
 
-def build_features(contract: PolicyContract, video_infos: dict[str, dict[str, Any]]) -> dict[str, Feature]:
-    """Describe every Parquet and video column the contract produces, for info.json.
+def build_features(contract: PolicyContract) -> dict[str, Feature]:
+    """Describe every column the contract produces, beyond the index columns LeRobot adds itself.
 
     Args:
         contract: The policy contract defining the state/action layout and cameras.
-        video_infos: Encoded video metadata (codec, geometry) per camera policy key.
 
     Returns:
         Feature definitions keyed by LeRobot feature name.
     """
     dtype = contract.policy.dtype
     features: dict[str, Feature] = {
-        name: Feature(dtype=spec["dtype"], shape=spec["shape"], names=spec["names"])
-        for name, spec in DEFAULT_FEATURES.items()
+        camera.dataset_feature_name: Feature(dtype="video", shape=camera.shape, names=["height", "width", "channels"])
+        for camera in contract.cameras
     }
-
-    for policy_key, video_info in video_infos.items():
-        features[get_video_feature_name(policy_key)] = VideoFeature(
-            names=["height", "width", "channels"],
-            shape=(video_info["video.height"], video_info["video.width"], video_info["video.channels"]),
-            video_info=video_info,
-        )
 
     for segment in contract.state:
         features[get_observation_state_feature_name(segment.policy_key)] = Feature(
@@ -74,7 +59,7 @@ def build_modality_config(contract: PolicyContract) -> ModalityConfig:
             for policy_key, span in contract.action_slices.items()
         ),
         video_entries=tuple(
-            VideoModalityEntry(key=camera.policy_key, original_key=get_video_feature_name(camera.policy_key))
+            VideoModalityEntry(key=camera.policy_key, original_key=camera.dataset_feature_name)
             for camera in contract.cameras
         ),
         annotation_entries=tuple(

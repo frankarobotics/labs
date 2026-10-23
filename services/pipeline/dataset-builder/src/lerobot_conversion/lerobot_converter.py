@@ -5,63 +5,42 @@ Conversion pipeline (in order):
   2. Decode frames — decompress each video stream into per-frame images at the camera's declared
      shape via VideoFrameExtractor, scaling to it where the contract enables resize.
   3. Synchronize — resample all modalities to a common target-FPS grid via TemporalSynchronizer.
-  4. Write Parquet — serialize synchronized observations to chunked Parquet files via LeRobotParquetWriter.
-  5. Write videos — encode the synchronized frames into target-FPS videos via LeRobotVideoWriter.
-  6. Write metadata — generate episodes.jsonl / tasks.jsonl / info.json / modality.json via LeRobotMetadataGenerator.
+  4. Record — hand each synchronized frame to LeRobot's v3.0 dataset writer, which encodes the videos,
+     packs episodes into shared data/video files and computes the per-episode stats.
+  5. Finalize — close the writer, then add GR00T's meta/modality.json from the contract.
 """
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from lerobot.datasets.utils import DEFAULT_CHUNK_SIZE  # type: ignore[import-not-found]
-from lerobot.datasets.video_utils import get_video_info  # type: ignore[import-not-found]
+from lerobot.configs.video import RGBEncoderConfig  # type: ignore[import-untyped]
+from lerobot.datasets.lerobot_dataset import LeRobotDataset  # type: ignore[import-untyped]
 from loguru import logger
 from pipeline_configs import CameraSegment
 
 from lerobot_conversion.lerobot_features import build_features, build_modality_config
+from lerobot_conversion.lerobot_frames import LeRobotFrameBuilder
 from lerobot_conversion.lerobot_mcap_reader import LeRobotMCAPReader
-from lerobot_conversion.lerobot_metadata_generator import LeRobotMetadataGenerator
-from lerobot_conversion.lerobot_parquet_writer import LeRobotParquetWriter
-from lerobot_conversion.lerobot_utils import get_video_feature_name
-from lerobot_conversion.lerobot_video_writer import ENCODE_PIX_FMT, LeRobotVideoWriter
 from lerobot_conversion.policy_manifest import load_policy_manifest
 from lerobot_conversion.temporal_synchronizer import TemporalSynchronizer
-from lerobot_conversion.video_frame_extractor import BGR_CHANNELS, VideoFrameExtractor
+from lerobot_conversion.video_frame_extractor import RGB_CHANNELS, VideoFrameExtractor
 from models.compressed_video_info import CompressedVideoInfo
+from models.dataset_build_request import DatasetBuildRequest
 from models.episode_metadata import EpisodeMetadata
 from models.extracted_mcap_data import ExtractedMcapData
 from models.observation import Observation
 from models.topic_statistics import TopicStatistics
 from models.video_frame import VideoFrame
 
-
-@dataclass(frozen=True)
-class DatasetSchema:
-    """Feature structure that every episode in a dataset must share.
-
-    The contract fixes the observation-state and action layout for every episode, so only the
-    encoded video geometry can still differ between them.
-    """
-
-    video_infos: dict[str, dict[str, Any]]
-
-    def camera_shapes(self) -> dict[str, tuple[Any, Any, Any]]:
-        """Map each camera policy key to its (height, width, channels)."""
-        return {
-            name: (info.get("video.height"), info.get("video.width"), info.get("video.channels"))
-            for name, info in self.video_infos.items()
-        }
+ENCODE_PIX_FMT = "yuv420p"
+# LeRobot stages each frame as a PNG before encoding; writing them off-thread keeps add_frame off the disk
+IMAGE_WRITER_THREADS_PER_CAMERA = 4
 
 
-@dataclass
-class ConvertedEpisode:
-    """Artifacts produced by converting a single episode."""
-
-    episode_metadata: EpisodeMetadata
-    task_definition: dict[str, Any]
-    schema: DatasetSchema
+def _video_encoder() -> RGBEncoderConfig:
+    """Encoder settings mirroring data-processor's VideoEncoder, except GOP=2 for LeRobot's random frame access."""
+    return RGBEncoderConfig(vcodec="libsvtav1", pix_fmt=ENCODE_PIX_FMT, g=2, crf=30, preset=8)
 
 
 class LeRobotConverter:
@@ -75,12 +54,12 @@ class LeRobotConverter:
         policy_contract_path: Path,
         dataset_name: str = "robot_dataset",
         policy_type: str = "gr00t",
-        target_fps: float | None = None,
+        target_fps: int | None = None,
     ) -> None:
         """Initialize LeRobot converter.
 
         Args:
-            output_dir: Output directory for LeRobot dataset
+            output_dir: Output directory for the LeRobot dataset; must not exist yet
             policy_contract_path: Path to the policy contract YAML file
             dataset_name: Name of the dataset
             policy_type: Policy model the contract targets; gates modality.json generation
@@ -89,15 +68,10 @@ class LeRobotConverter:
         self.output_dir: Path = output_dir
         self.dataset_name: str = dataset_name
         self.policy_type: str = policy_type
-        # each distinct task gets the next free index, which every frame of its episodes carries
-        self.task_definitions: list[dict[str, Any]] = []
-
-        # Create output directory
-        self.output_dir.mkdir(parents=True, exist_ok=True)
 
         self.manifest = load_policy_manifest(policy_contract_path)
         self.contract = self.manifest.contract
-        self.target_fps: float = target_fps if target_fps is not None else self.contract.policy.control_rate_hz
+        self.target_fps = target_fps if target_fps is not None else self.contract.policy.control_rate_hz
 
         # LeRobot episodes are video-backed: the timebase every other modality is resampled onto comes from a camera
         if not self.contract.cameras:
@@ -111,43 +85,47 @@ class LeRobotConverter:
             f"action width {self.contract.action_width}"
         )
 
-        # Initialize components
         self.mcap_reader = LeRobotMCAPReader(manifest=self.manifest)
         self.frame_extractor = VideoFrameExtractor(self.target_fps)
         self.synchronizer = TemporalSynchronizer(self.target_fps)
-        self.parquet_writer = LeRobotParquetWriter(output_dir, self.contract)
-        self.video_writer = LeRobotVideoWriter(output_dir)
-        self.metadata_generator = LeRobotMetadataGenerator(output_dir)
+        self.frame_builder = LeRobotFrameBuilder(self.contract)
+        # created last: it claims output_dir, which a failed validation above must leave untouched
+        self.dataset = LeRobotDataset.create(
+            repo_id=dataset_name,
+            fps=self.target_fps,
+            features={name: feature.to_dict() for name, feature in build_features(self.contract).items()},
+            root=output_dir,
+            use_videos=True,
+            rgb_encoder=_video_encoder(),
+            image_writer_threads=IMAGE_WRITER_THREADS_PER_CAMERA * len(self.contract.cameras),
+        )
 
         logger.debug(f"LeRobotConverter initialized: {output_dir}")
         logger.debug(f"Target FPS: {self.target_fps}, Dataset: {dataset_name}")
 
-    def convert_episode(self, mcap_file: Path, episode_index: int = 0) -> ConvertedEpisode:
-        """Convert a single MCAP file to LeRobot episode artifacts (Parquet + videos).
+    def convert_episode(self, mcap_file: Path) -> EpisodeMetadata:
+        """Convert a single MCAP file into the next episode of the dataset.
 
-        Does **not** finalize dataset metadata — call `finalize_dataset` once after
+        Does **not** finalize the dataset — call `finalize_dataset` once after
         all episodes have been converted.
 
         Args:
             mcap_file: Path to input MCAP file.
-            episode_index: Episode number.
 
         Returns:
-            A `ConvertedEpisode` with all per-episode artifacts.
+            The recorded episode's metadata.
         """
+        episode_index = self.dataset.meta.total_episodes
         logger.info(f"Converting episode {episode_index}: {mcap_file}")
 
         if not mcap_file.exists():
             raise FileNotFoundError(f"MCAP file not found: {mcap_file}")
 
-        chunk_index = episode_index // DEFAULT_CHUNK_SIZE
-
         try:
             # Step 1: Extract data from MCAP
             extracted_data = self._extract_mcap_data(mcap_file)
             self._validate_extracted_data(extracted_data)
-            task_definition = self._load_task_definition(extracted_data.metadata)
-            task_index = self._resolve_task_index(task_definition)
+            task = self._load_task(extracted_data.metadata)
 
             # Step 2: Extract video frames
             videos = {
@@ -160,30 +138,21 @@ class LeRobotConverter:
             # Step 3: Synchronize all modalities
             synchronized_data = self.synchronizer.synchronize_episode_data(videos, extracted_data)
 
-            # Step 4: Write synchronized data to Parquet
-            episode_meta = self.parquet_writer.write_episode_data(
-                synchronized_data, episode_index, chunk_index, task_index
-            )
-
-            # Step 5: Write video files
-            video_infos = self._write_video_files(synchronized_data, episode_index, chunk_index)
-
-            # Step 6: Update episode metadata
-            episode_meta.mcap_file = str(mcap_file)
-            episode_meta.synchronized_frames = len(synchronized_data)
-            episode_meta.tasks = [str(task_definition["task"])]
-
-            # Step 7: Generate synchronization statistics
-            sync_stats: dict[str, Any] = self.synchronizer.calculate_synchronization_stats(synchronized_data)
-            episode_meta.sync_stats = sync_stats
+            # Step 4: Record the episode
+            self.record_episode(synchronized_data, task)
 
             logger.info(f"Episode {episode_index} converted successfully")
             logger.info(f"Generated {len(synchronized_data)} synchronized observations")
 
-            return ConvertedEpisode(
-                episode_metadata=episode_meta,
-                task_definition=task_definition,
-                schema=DatasetSchema(video_infos=video_infos),
+            return EpisodeMetadata(
+                episode_index=episode_index,
+                frame_count=len(synchronized_data),
+                duration_seconds=(synchronized_data[-1].timestamp_ns - synchronized_data[0].timestamp_ns) / 1e9,
+                start_timestamp_ns=synchronized_data[0].timestamp_ns,
+                end_timestamp_ns=synchronized_data[-1].timestamp_ns,
+                tasks=[task],
+                mcap_file=str(mcap_file),
+                sync_stats=self.synchronizer.calculate_synchronization_stats(synchronized_data),
             )
 
         except Exception as e:
@@ -192,106 +161,91 @@ class LeRobotConverter:
             logger.error(f"Failed to convert episode {episode_index} ({episode_info}): {e}")
             raise
 
-    def _default_task_definition(self) -> dict[str, Any]:
-        """Return the default task definition for single-episode conversion."""
-        return {"task": self.DEFAULT_TASK_NAME}
+    def record_episode(self, observations: list[Observation], task: str) -> None:
+        """Write synchronized observations as the dataset's next episode.
 
-    def _load_task_definition(self, metadata: dict[str, Any]) -> dict[str, Any]:
-        """Load a task definition from MCAP metadata when available."""
+        Args:
+            observations: Synchronized observations in timeline order, one per frame
+            task: The episode's task description
+        """
+        if not observations:
+            raise ValueError(f"No synchronized observations to record (episode {self.dataset.meta.total_episodes})")
+
+        task_index = self._resolve_task_index(task)
+        last_frame = len(observations) - 1
+        for frame_index, observation in enumerate(observations):
+            self.dataset.add_frame(
+                self.frame_builder.build(
+                    observation, is_last_frame=frame_index == last_frame, task=task, task_index=task_index
+                )
+            )
+        # serial: a process pool would fork() past the image-writer threads; libsvtav1 threads each encode anyway
+        self.dataset.save_episode(parallel_encoding=False)
+
+        # annotations copy task_index into their own column, so it must be the index LeRobot recorded
+        recorded_index = self.dataset.meta.get_task_index(task)
+        if recorded_index != task_index:
+            raise RuntimeError(f"LeRobot indexed task {task!r} as {recorded_index}, but its frames carry {task_index}")
+
+    def _load_task(self, metadata: dict[str, Any]) -> str:
+        """Load the episode's task description from MCAP metadata when available."""
         episode_context = metadata.get("episode_context")
         if not isinstance(episode_context, dict):
-            return self._default_task_definition()
+            return self.DEFAULT_TASK_NAME
 
         serialized_context = episode_context.get("data")
         if not isinstance(serialized_context, str):
-            return self._default_task_definition()
+            return self.DEFAULT_TASK_NAME
 
         try:
             decoded_context = json.loads(serialized_context)
         except json.JSONDecodeError as exc:
             logger.warning(f"Failed to decode episode_context metadata: {exc}")
-            return self._default_task_definition()
+            return self.DEFAULT_TASK_NAME
 
         task_description = decoded_context.get("task_description")
         if isinstance(task_description, str) and task_description.strip():
-            return {"task": task_description.strip()}
+            return task_description.strip()
 
-        return self._default_task_definition()
+        return self.DEFAULT_TASK_NAME
 
-    def _resolve_task_index(self, task_definition: dict[str, Any]) -> int:
-        """Index of this task in tasks.jsonl, registering it the first time it is seen."""
-        task = task_definition["task"]
-        for known in self.task_definitions:
-            if known["task"] == task:
-                return int(known["task_index"])
-        self.task_definitions.append({**task_definition, "task_index": len(self.task_definitions)})
-        return len(self.task_definitions) - 1
+    def _resolve_task_index(self, task: str) -> int:
+        """Index LeRobot gives this task in meta/tasks.parquet: its existing one, else the next free one."""
+        tasks = self.dataset.meta.tasks
+        if tasks is None:
+            return 0
+        if task in tasks.index:
+            return int(tasks.loc[task].task_index)
+        return len(tasks)
 
-    def finalize_dataset(
-        self,
-        dataset_description: str,
-        video_infos: dict[str, dict[str, Any]],
-        episode_metadata: list[EpisodeMetadata],
-        task_definitions: list[dict[str, Any]],
-        additional_info: dict[str, Any] | None = None,
-    ) -> dict[str, Path]:
-        """Finalize dataset by generating all metadata files.
-
-        Args:
-            dataset_description: Human-readable dataset description to embed in metadata
-            video_infos: Video metadata per camera policy key (codecs, dimensions, etc.)
-            episode_metadata: Episode-level metadata entries
-            task_definitions: Task definitions to write to tasks metadata
-            additional_info: Optional additional metadata to include
+    def finalize_dataset(self) -> dict[str, Path]:
+        """Close the dataset writer and add the contract-derived metadata LeRobot does not write.
 
         Returns:
-            Dictionary of created metadata file paths.
+            Dictionary of the dataset's metadata file paths.
         """
         logger.info("Finalizing LeRobot dataset...")
 
-        metadata_files = {}
+        self.dataset.finalize()
+        for camera in self.contract.cameras:
+            _check_camera_geometry(camera, self.dataset.meta.features[camera.dataset_feature_name].get("info", {}))
 
-        try:
-            # Episodes metadata
-            metadata_files["episodes"] = self.metadata_generator.write_episodes_metadata(episode_metadata)
+        meta_dir = self.output_dir / "meta"
+        metadata_files = {
+            "info": meta_dir / "info.json",
+            "stats": meta_dir / "stats.json",
+            "tasks": meta_dir / "tasks.parquet",
+            "episodes": meta_dir / "episodes",
+        }
+        # modality.json is a GR00T-specific input file; other policies read features straight from info.json
+        if self.policy_type == "gr00t":
+            metadata_files["modality"] = meta_dir / "modality.json"
+            metadata_files["modality"].write_text(json.dumps(build_modality_config(self.contract).to_dict(), indent=2))
 
-            features = build_features(self.contract, video_infos)
-
-            # Episodes statistics metadata (one entry per episode)
-            episode_indices = [meta.episode_index for meta in episode_metadata]
-            metadata_files["episodes_stats"] = self.metadata_generator.write_episodes_stats_metadata(
-                episode_indices, features
-            )
-
-            # Tasks metadata
-            metadata_files["tasks"] = self.metadata_generator.write_tasks_metadata(task_definitions)
-
-            # Dataset info
-            metadata_files["info"] = self.metadata_generator.write_dataset_info(
-                episode_metadata, features, int(self.target_fps), additional_info, total_tasks=len(task_definitions)
-            )
-
-            # modality.json is a GR00T-specific input file; other policies read features straight from info.json
-            if self.policy_type == "gr00t":
-                metadata_files["modality"] = self.metadata_generator.write_modality_metadata(
-                    build_modality_config(self.contract).to_dict()
-                )
-
-            # Dataset README
-            metadata_files["readme"] = self.metadata_generator.create_dataset_readme(
-                self.dataset_name, dataset_description
-            )
-
-            # Validate all metadata
-            if self.metadata_generator.validate_metadata_files():
-                logger.info("Dataset finalized successfully")
-            else:
-                logger.warning("Dataset finalized with validation warnings")
-
-        except Exception as e:
-            logger.error(f"Failed to finalize dataset: {e}")
-            raise
-
+        logger.info(
+            f"Dataset finalized: {self.dataset.meta.total_episodes} episode(s), "
+            f"{self.dataset.meta.total_frames} frame(s)"
+        )
         return metadata_files
 
     def _extract_mcap_data(self, mcap_file: Path) -> ExtractedMcapData:
@@ -312,9 +266,9 @@ class LeRobotConverter:
         would silently shorten the flat state/action vectors of every frame.
         """
         missing = {
-            "cameras": [key for key in self.manifest.camera_keys if key not in extracted_data.compressed_videos],
-            "state": [key for key in self.manifest.state_keys if key not in extracted_data.robot_states],
-            "action": [key for key in self.manifest.action_keys if key not in extracted_data.actions],
+            "cameras": [key for key in self.contract.camera_keys if key not in extracted_data.compressed_videos],
+            "state": [key for key in self.contract.state_keys if key not in extracted_data.robot_states],
+            "action": [key for key in self.contract.action_keys if key not in extracted_data.actions],
         }
         reported = [f"{label}: {', '.join(keys)}" for label, keys in missing.items() if keys]
         if reported:
@@ -346,104 +300,61 @@ class LeRobotConverter:
             # the extractor works on bare video bytes and cannot name the segment that declared them
             raise ValueError(f"Camera {policy_key!r}: {error}") from error
 
-    def _write_video_files(
-        self, synchronized_data: list[Observation], episode_index: int, chunk_index: int
-    ) -> dict[str, dict[str, Any]]:
-        """Encode one target-FPS video per camera from the synchronized frames."""
-        if not synchronized_data:
-            raise ValueError(f"No synchronized observations to write videos for (episode {episode_index})")
-
-        video_infos = {}
-        for policy_key in synchronized_data[0].image:
-            feature_name: str = get_video_feature_name(policy_key)
-            frames = [observation.image[policy_key].image for observation in synchronized_data]
-
-            video_file: Path = self.video_writer.write_video_from_frames(
-                frames, feature_name, episode_index, chunk_index, self.target_fps
-            )
-
-            video_info = get_video_info(video_file)
-            video_infos[policy_key] = video_info
-            _check_camera_geometry(self.manifest.camera_for(policy_key), video_info)
-
-            logger.debug(f"video properties: {json.dumps(video_info)}")
-        return video_infos
-
     def close(self) -> None:
         """Clean up resources."""
-        if self.frame_extractor:
+        try:
             self.frame_extractor.close()
+        finally:
+            # idempotent; on a failed build it still stops the image-writer threads
+            self.dataset.finalize()
 
         logger.info("LeRobotConverter closed")
 
 
-def convert_mcaps_to_lerobot(
-    mcap_files: tuple[Path, ...] | list[Path],
-    output_dir: Path,
-    policy_contract_path: Path,
-    dataset_name: str = "robot_dataset",
-    policy_type: str = "gr00t",
-    target_fps: float | None = None,
-) -> dict[str, Any]:
+def convert_mcaps_to_lerobot(request: DatasetBuildRequest) -> dict[str, Any]:
     """Convert one or more MCAP files into a single LeRobot dataset.
 
     Args:
-        mcap_files: Ordered paths to MCAP files (each becomes one episode)
-        output_dir: Output directory for the LeRobot dataset
-        policy_contract_path: Path to the policy contract YAML file
-        dataset_name: Dataset name
-        policy_type: Policy model the contract targets; gates modality.json generation
-        target_fps: Resampling target, defaulting to the contract's policy.control_rate_hz
+        request: Build input; each MCAP file becomes one episode, in order, and the output directory must not exist yet
 
     Returns:
         Conversion result dict with episode metadata, metadata files, and dataset dir
     """
-    converter = LeRobotConverter(output_dir, policy_contract_path, dataset_name, policy_type, target_fps)
+    if not request.mcap_files:
+        raise ValueError("No MCAP files were provided; cannot build a dataset.")
 
-    all_episode_meta: list[EpisodeMetadata] = []
-    reference_episode: ConvertedEpisode | None = None
+    converter = LeRobotConverter(
+        request.output_dir,
+        request.policy_contract_path,
+        request.dataset_name,
+        request.policy_type,
+        request.target_fps,
+    )
 
     try:
-        for episode_index, mcap_file in enumerate(mcap_files):
-            mcap_path = Path(mcap_file)
-
-            converted = converter.convert_episode(mcap_path, episode_index=episode_index)
-
-            if reference_episode is None:
-                reference_episode = converted
-            else:
-                _assert_consistent_structure(reference_episode, converted, episode_index, mcap_path)
-
-            all_episode_meta.append(converted.episode_metadata)
-
-        if reference_episode is None:
-            raise ValueError("No MCAP files were provided; cannot build a dataset.")
-
-        description = f"Dataset with {len(all_episode_meta)} episode(s) converted from MCAP files"
-        metadata_files = converter.finalize_dataset(
-            description,
-            reference_episode.schema.video_infos,
-            all_episode_meta,
-            converter.task_definitions,
-        )
-
-        return {
-            "episode_metadata": all_episode_meta,
-            "metadata_files": metadata_files,
-            "dataset_dir": output_dir,
-        }
-
+        episode_metadata = [converter.convert_episode(Path(mcap_file)) for mcap_file in request.mcap_files]
+        metadata_files = converter.finalize_dataset()
     finally:
-        converter.close()
+        # a cleanup failure must neither replace a conversion error nor fail an already finalized dataset
+        try:
+            converter.close()
+        except Exception:
+            logger.exception("Failed to close the converter")
+
+    return {
+        "episode_metadata": episode_metadata,
+        "metadata_files": metadata_files,
+        "dataset_dir": request.output_dir,
+    }
 
 
 def _validate_camera_shapes(cameras: tuple[CameraSegment, ...]) -> None:
     """Reject declared geometry the video path cannot produce."""
     for camera in cameras:
-        if camera.channels != BGR_CHANNELS:
+        if camera.channels != RGB_CHANNELS:
             raise ValueError(
                 f"Camera {camera.policy_key!r} declares {camera.channels} channels; "
-                f"only {BGR_CHANNELS}-channel video is supported"
+                f"only {RGB_CHANNELS}-channel video is supported"
             )
         # ``yuv420p`` even-dimension requirement
         if camera.height % 2 or camera.width % 2:
@@ -455,30 +366,11 @@ def _validate_camera_shapes(cameras: tuple[CameraSegment, ...]) -> None:
 
 def _check_camera_geometry(camera: CameraSegment, video_info: dict[str, Any]) -> None:
     """Assert the encoded episode video carries the geometry the policy will be served at."""
-    encoded = (video_info["video.height"], video_info["video.width"], video_info["video.channels"])
+    encoded = (video_info.get("video.height"), video_info.get("video.width"), video_info.get("video.channels"))
     if encoded == (camera.height, camera.width, camera.channels):
         return
 
     raise ValueError(
         f"Camera {camera.policy_key!r} frames were written at {list(camera.shape)} but the encoded "
         f"video is {list(encoded)}"
-    )
-
-
-def _assert_consistent_structure(
-    reference: ConvertedEpisode,
-    current: ConvertedEpisode,
-    episode_index: int,
-    mcap_file: Path,
-) -> None:
-    """Raise error if current episode does not share the reference episode's camera geometry."""
-    reference_cameras = reference.schema.camera_shapes()
-    current_cameras = current.schema.camera_shapes()
-    if reference_cameras == current_cameras:
-        return
-
-    raise ValueError(
-        f"Episode {episode_index} ({mcap_file}) has a different structure than the first episode "
-        f"and cannot be combined into one dataset. Differences -> "
-        f"cameras: expected {reference_cameras}, got {current_cameras}"
     )

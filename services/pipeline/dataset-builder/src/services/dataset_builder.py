@@ -1,30 +1,17 @@
 """Dataset build orchestration and format registry."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from importlib import import_module
-from pathlib import Path
 from typing import Any
 
-DatasetBuilder = Callable[..., dict[str, Any]]
+from models.dataset_build_request import DatasetBuildRequest
+
+DatasetBuilder = Callable[[DatasetBuildRequest], dict[str, Any]]
 DatasetBuilderLoader = Callable[[], DatasetBuilder]
 
 
 class UnsupportedDatasetFormatError(ValueError):
     """Raised when a dataset format is not registered."""
-
-
-@dataclass(frozen=True)
-class DatasetBuildRequest:
-    """Input required to build a dataset from one or more MCAP files."""
-
-    mcap_files: tuple[Path, ...]
-    output_dir: Path
-    target_format: str
-    dataset_name: str
-    policy_contract_path: Path
-    policy_type: str
-    target_fps: float | None = None
 
 
 def _load_lerobot_builder() -> DatasetBuilder:
@@ -54,11 +41,4 @@ def build_dataset(request: DatasetBuildRequest) -> dict[str, Any]:
 
     builder = builder_loader()
 
-    return builder(
-        mcap_files=request.mcap_files,
-        output_dir=request.output_dir,
-        policy_contract_path=request.policy_contract_path,
-        dataset_name=request.dataset_name,
-        policy_type=request.policy_type,
-        target_fps=request.target_fps,
-    )
+    return builder(request)

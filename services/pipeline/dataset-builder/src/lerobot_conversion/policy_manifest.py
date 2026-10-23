@@ -29,21 +29,6 @@ class PolicyManifest:
             action_by_topic=_group_by_topic(contract.action, lambda segment: segment.topic),
         )
 
-    @property
-    def camera_keys(self) -> tuple[str, ...]:
-        """Camera policy keys in contract order."""
-        return tuple(camera.policy_key for camera in self.contract.cameras)
-
-    @property
-    def state_keys(self) -> tuple[str, ...]:
-        """State policy keys in flat-vector order."""
-        return tuple(segment.policy_key for segment in self.contract.state)
-
-    @property
-    def action_keys(self) -> tuple[str, ...]:
-        """Action policy keys in flat-vector order."""
-        return tuple(segment.policy_key for segment in self.contract.action)
-
     def camera_for(self, policy_key: str) -> CameraSegment:
         """Camera segment a policy key names."""
         for camera in self.contract.cameras:
@@ -53,15 +38,15 @@ class PolicyManifest:
 
     def order_cameras[Value](self, values_by_key: dict[str, Value]) -> dict[str, Value]:
         """Reorder camera-keyed values into contract order."""
-        return _ordered(values_by_key, self.camera_keys)
+        return _ordered(values_by_key, self.contract.camera_keys)
 
     def order_state[Value](self, values_by_key: dict[str, Value]) -> dict[str, Value]:
         """Reorder state-keyed values into flat-vector order."""
-        return _ordered(values_by_key, self.state_keys)
+        return _ordered(values_by_key, self.contract.state_keys)
 
     def order_action[Value](self, values_by_key: dict[str, Value]) -> dict[str, Value]:
         """Reorder action-keyed values into flat-vector order."""
-        return _ordered(values_by_key, self.action_keys)
+        return _ordered(values_by_key, self.contract.action_keys)
 
 
 def load_policy_manifest(contract_path: Path) -> PolicyManifest:

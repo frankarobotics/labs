@@ -47,9 +47,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --frozen
 
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv add "cmake<4.0" lerobot==0.3.3
-
 COPY src src
 COPY entrypoint.sh entrypoint.sh
 
@@ -95,9 +92,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --frozen --no-install-project --no-dev
-
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv add "cmake<4.0" lerobot==0.3.3
 
 COPY src src
 

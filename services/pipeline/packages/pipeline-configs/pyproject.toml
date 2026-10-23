@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Shared config models for the pipeline services (station, policy contract, ...)."
 license = "Apache-2.0"
 requires-python = ">=3.12"
+# numpy floor stays below 2 because data-collection still resolves 1.x
 dependencies = [
+    "numpy>=1.24",
     "pydantic>=2.11.7",
     "pydantic-yaml>=1.5.1",
 ]
