@@ -18,7 +18,7 @@ unified pipeline.
 LABS runs a set of containerized services grouped by role: input devices, sensors, actuators, and pipeline services.
 Users interact with the data collection UI, which triggers data recording for the ROS 2 nodes of actuators, input
 devices and sensors. A processing service saves episodes in MCAP format, allowing users to build datasets and export
-them in LeRobot format v2.1.
+them in LeRobot format v3.0.
 
 **Typical Workflow**: Configure hardware (station) → Start software stack and collect episodes via the UI →
 Automatically process and save in MCAP format → Replay and analyze through the UI _(Not yet available)_ → Export to a
@@ -33,7 +33,7 @@ For a detailed architecture diagram, see the [Architecture Diagram](docs/labs-ar
 - Python 3.12+ with `uv` package manager
 - ROS 2 Jazzy
 - Recording/export via `ros2 bag` in MCAP format
-- Dataset export format: LeRobot v2.1
+- Dataset export format: LeRobot v3.0
 - Media processing: FFmpeg-based video encoding and Foxglove-compatible artifacts
 - Web UI: React + TypeScript
 

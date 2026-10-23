@@ -3,9 +3,11 @@
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 from loguru import logger
 from scipy import interpolate
 
+from lerobot_conversion.fps_grid import grid_intervals, grid_timestamps_ns
 from models.extracted_mcap_data import ExtractedMcapData
 from models.observation import Observation
 from models.observation_action import ObservationAction
@@ -28,16 +30,15 @@ class SynchronizationError(RuntimeError):
 class TemporalSynchronizer:
     """Synchronize multi-modal data to a common target-FPS timebase."""
 
-    def __init__(self, target_fps: float = 20.0) -> None:
+    def __init__(self, target_fps: int = 20) -> None:
         """Initialize temporal synchronizer.
 
         Args:
             target_fps: Target sampling frequency in Hz
         """
-        self.target_fps: float = target_fps
-        self.frame_interval_ns = int(1e9 / target_fps)  # Nanoseconds between frames
+        self.target_fps: int = target_fps
 
-        logger.debug(f"TemporalSynchronizer initialized at {target_fps} Hz ({self.frame_interval_ns}ns intervals)")
+        logger.debug(f"TemporalSynchronizer initialized at {target_fps} Hz")
 
     def synchronize_episode_data(
         self,
@@ -80,7 +81,7 @@ class TemporalSynchronizer:
         logger.debug(f"Time bounds: {start_time_ns} to {end_time_ns} ({duration_ns / 1e9:.3f}s)")
 
         # Generate target-FPS timestamp grid
-        num_samples: int = int(duration_ns / self.frame_interval_ns) + 1
+        num_samples = grid_intervals(duration_ns, self.target_fps) + 1
 
         if num_samples < MIN_EPISODE_SAMPLES:
             # A single (or zero-length) sample means the recording spans less than one
@@ -91,7 +92,7 @@ class TemporalSynchronizer:
                 f"(< one {1e9 / self.target_fps / 1e6:.0f}ms frame interval); too short to synchronize"
             )
 
-        target_timestamps_ns = np.linspace(start_time_ns, end_time_ns, num_samples, dtype=np.int64)
+        target_timestamps_ns = grid_timestamps_ns(start_time_ns, num_samples, self.target_fps)
 
         logger.debug(f"Generating {len(target_timestamps_ns)} samples at {self.target_fps} Hz")
 
@@ -244,7 +245,7 @@ class TemporalSynchronizer:
             raise SynchronizationError("Synchronized end time is too far from last message time")
 
     def _synchronize_videos(
-        self, videos: dict[str, list[VideoFrame]], target_timestamps_ns: np.ndarray
+        self, videos: dict[str, list[VideoFrame]], target_timestamps_ns: npt.NDArray[np.int64]
     ) -> dict[str, list[ObservationImage]]:
         """Synchronize multiple video streams to target timestamps.
 
@@ -264,7 +265,9 @@ class TemporalSynchronizer:
 
         return synchronized_videos
 
-    def _synchronize_frames(self, frames: list[VideoFrame], target_timestamps_ns: np.ndarray) -> list[ObservationImage]:
+    def _synchronize_frames(
+        self, frames: list[VideoFrame], target_timestamps_ns: npt.NDArray[np.int64]
+    ) -> list[ObservationImage]:
         """Synchronize video frames to target timestamps.
 
         Args:
@@ -274,9 +277,6 @@ class TemporalSynchronizer:
         Returns:
             Synchronized frame data
         """
-        if not frames:
-            return []
-
         # Extract frame timestamps
         frame_times = np.array([frame.timestamp_ns for frame in frames])
 
@@ -301,7 +301,7 @@ class TemporalSynchronizer:
         return synchronized_frames
 
     def _synchronize_robot_states(
-        self, robot_states: dict[str, list[RobotState]], target_timestamps_ns: np.ndarray
+        self, robot_states: dict[str, list[RobotState]], target_timestamps_ns: npt.NDArray[np.int64]
     ) -> dict[str, list[ObservationState]]:
         """Synchronize robot state data using interpolation.
 
@@ -359,7 +359,7 @@ class TemporalSynchronizer:
         return synchronized_states
 
     def _synchronize_actions(
-        self, actions: dict[str, list[RobotAction]], target_timestamps_ns: np.ndarray
+        self, actions: dict[str, list[RobotAction]], target_timestamps_ns: npt.NDArray[np.int64]
     ) -> dict[str, list[ObservationAction]]:
         """Synchronize action data using interpolation.
 
