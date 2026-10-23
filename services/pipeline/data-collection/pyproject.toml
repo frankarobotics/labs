@@ -30,6 +30,14 @@ dependencies = [
 [tool.uv.sources]
 pipeline-configs = { path = "../packages/pipeline-configs", editable = true }
 
+[project.optional-dependencies]
+nomadic = [
+    "nomadic==0.1.64",
+    "av>=14.0.0",
+    "foxglove-schemas-protobuf==0.4.0",
+    "mcap-protobuf-support>=0.5.3,<0.6",
+]
+
 [dependency-groups]
 dev = [
     "debugpy>=1.8.16",

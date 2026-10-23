@@ -28,6 +28,8 @@ WORKDIR /workspace
 # Stage: dev
 FROM deps AS dev
 
+ARG NOMADIC_INTEGRATION=false
+
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl iputils-ping vim-tiny wget \
     && apt-get clean \
@@ -48,7 +50,7 @@ COPY uv.lock uv.lock
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen
+    if [ "$NOMADIC_INTEGRATION" = "true" ]; then uv sync --frozen --extra nomadic; else uv sync --frozen; fi
 
 COPY src src
 COPY entrypoint.sh entrypoint.sh
@@ -78,6 +80,8 @@ CMD ["./entrypoint.sh"]
 # https://github.com/astral-sh/uv-docker-example/blob/main/Dockerfile
 FROM deps AS prod
 
+ARG NOMADIC_INTEGRATION=false
+
 # Only for debugging
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl iputils-ping vim-tiny wget \
@@ -103,12 +107,15 @@ COPY pyproject.toml pyproject.toml
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-project --no-dev
+    if [ "$NOMADIC_INTEGRATION" = "true" ]; then \
+        uv sync --frozen --no-install-project --no-dev --extra nomadic; \
+    else uv sync --frozen --no-install-project --no-dev; fi
 
 COPY src src
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    if [ "$NOMADIC_INTEGRATION" = "true" ]; then uv sync --frozen --no-dev --extra nomadic; \
+    else uv sync --frozen --no-dev; fi
 
 COPY entrypoint.sh entrypoint.sh
 

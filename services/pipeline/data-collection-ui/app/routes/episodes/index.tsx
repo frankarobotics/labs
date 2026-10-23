@@ -66,7 +66,7 @@ export default function Episodes({ loaderData: { episodes, total } }: Route.Comp
         </div>
         <div className='screen:h-30 pointer-events-none absolute right-0 bottom-0 left-0 h-25 w-full bg-gradient-to-b from-transparent to-white' />
       </div>
-      <div className='col-span-4'>
+      <div className='col-span-4 min-h-0 overflow-y-auto'>
         <Outlet />
       </div>
     </main>

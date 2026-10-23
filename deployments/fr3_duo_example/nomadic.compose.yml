@@ -1,0 +1,28 @@
+# Optional Nomadic annotations for the FR3 Duo example station.
+services:
+  data-collection:
+    build:
+      context: ../../services/pipeline/data-collection
+      additional_contexts:
+        packages: ../../services/pipeline/packages
+      dockerfile: data-collection.dockerfile
+      target: ${BUILD_TARGET:-dev}
+      args:
+        NOMADIC_INTEGRATION: 'true'
+    environment:
+      NOMADIC_ENABLED: ${NOMADIC_ENABLED:-true}
+      NOMADIC_API_KEY: ${NOMADIC_API_KEY:-}
+      NOMADIC_POLICY_CONTRACT_PATH: /workspace/nomadic-config/${NOMADIC_POLICY_CONTRACT_FILE:-config_contract_gr00t.yml}
+      NOMADIC_SPEC_PATH: ${NOMADIC_SPEC_FILE:+/workspace/nomadic-config/}${NOMADIC_SPEC_FILE:-}
+    volumes:
+      - type: bind
+        source: ${NOMADIC_CONFIG_DIR:-.}
+        target: /workspace/nomadic-config
+        read_only: true
+        bind:
+          create_host_path: false
+  data-collection-ui:
+    build:
+      context: ../../services/pipeline/data-collection-ui
+      dockerfile: data-collection-ui.dockerfile
+      target: ${BUILD_TARGET:-dev}
