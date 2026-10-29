@@ -1,4 +1,4 @@
-"""Resolve completed recordings without importing ROS-dependent services."""
+"""Resolve completed LABS recordings inside the processed episodes directory."""
 
 from pathlib import Path
 from uuid import UUID
@@ -11,7 +11,7 @@ from pipeline_episodes import (
     episode_directory,
 )
 
-from annotations.config import AnnotationConfig
+from configs.annotator import AnnotationConfig
 
 
 def recording_path(config: AnnotationConfig, episode_id: UUID) -> Path:

@@ -1,22 +1,22 @@
 """Nomadic SDK operations and annotation response normalization."""
 
-import importlib
 import math
 from typing import Any
 from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 from uuid import NAMESPACE_URL, uuid5
 
-from annotations.config import AnnotationConfig
-from annotations.models import AnnotationEvent
+import nomadic  # type: ignore[import-untyped]
+
+from configs.annotator import AnnotationConfig
+from jobs.models import AnnotationEvent
 
 
 class NomadicGateway:
     """Own one SDK session for the lifetime of a background job."""
 
     def __init__(self, config: AnnotationConfig) -> None:
-        """Import the optional SDK only when annotation is requested."""
-        sdk = importlib.import_module("nomadic")
-        self.client = sdk.NomadicAI(
+        """Open an SDK session and reject SDKs without robotics indexing."""
+        self.client = nomadic.NomadicAI(
             api_key=config.api_key.get_secret_value(),
             base_url=config.base_url,
             timeout=60,

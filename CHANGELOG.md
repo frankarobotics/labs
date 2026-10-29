@@ -4,6 +4,8 @@
 
 - Episode metadata models, device enums and the on-disk episode layout moved from data-collection into a shared
   `pipeline-episodes` package, so other pipeline services can read episodes without depending on data-collection.
+- Nomadic action annotation runs in its own optional `nomadic-episode-annotator` service on port 3005, instead of inside
+  data-collection. Stations without it build and run data-collection without the Nomadic dependencies.
 
 ## [0.2.1] - 2026-09-10
 

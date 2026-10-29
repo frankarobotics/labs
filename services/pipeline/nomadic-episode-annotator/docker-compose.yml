@@ -1,0 +1,23 @@
+services:
+  nomadic-episode-annotator:
+    image: ${DOCKER_REGISTRY:-registry.localhost}/labs/nomadic-episode-annotator:${DOCKER_TAG:-latest}
+    build:
+      context: .
+      additional_contexts:
+        packages: ../packages
+      dockerfile: nomadic-episode-annotator.dockerfile
+      target: ${BUILD_TARGET:-dev}
+      args:
+        BUILD_TARGET: ${BUILD_TARGET:-dev}
+        BUILD_CREATED: ${BUILD_CREATED:-}
+        BUILD_VERSION: ${BUILD_VERSION:-}
+        GIT_COMMIT: ${GIT_COMMIT:-}
+    container_name: nomadic-episode-annotator
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      NOMADIC_ENABLED: ${NOMADIC_ENABLED:-true}
+      NOMADIC_API_KEY: ${NOMADIC_API_KEY:-}
+    volumes:
+      - ${DATA_ROOT:-../../../data}/processed_episodes:/workspace/data/processed_episodes:ro
+      - ${DATA_ROOT:-../../../data}/nomadic_annotations:/workspace/data/nomadic_annotations

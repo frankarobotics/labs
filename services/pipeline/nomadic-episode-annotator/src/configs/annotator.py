@@ -6,8 +6,6 @@ from pathlib import Path
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from configs.data_collection import load_data_collection_config
-
 
 class AnnotationConfig(BaseSettings):
     """Load optional integration settings from NOMADIC_* environment variables."""
@@ -31,9 +29,4 @@ class AnnotationConfig(BaseSettings):
 @lru_cache
 def get_annotation_config() -> AnnotationConfig:
     """Read configuration once; credentials never enter API response models."""
-    config = AnnotationConfig()
-    if "processed_episodes_path" not in config.model_fields_set:
-        config.processed_episodes_path = Path(load_data_collection_config().processed_data_path)
-    if "state_path" not in config.model_fields_set:
-        config.state_path = config.processed_episodes_path.parent / "nomadic_annotations"
-    return config
+    return AnnotationConfig()

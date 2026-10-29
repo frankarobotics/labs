@@ -14,8 +14,8 @@ from mcap_ros2.writer import Writer as ROSWriter
 from pipeline_configs import PolicyContract, StationConfig
 from test_annotations import T0, processed_recording
 
-from annotations.preparation import RecordingPreparer, file_digest
-from annotations.reference_station import KNUCKLE_MAX_RADIANS, KNUCKLE_NAME, ReferenceStationMapping
+from recording_conversion.preparation import RecordingPreparer, file_digest
+from recording_conversion.reference_station import KNUCKLE_MAX_RADIANS, KNUCKLE_NAME, ReferenceStationMapping
 
 REPO = Path(__file__).resolve().parents[4]
 CONTRACT = REPO / "deployments/fr3_duo_example/config_contract_gr00t.yml"

@@ -13,10 +13,10 @@ from pipeline_configs import PolicyContract
 from test_annotations import T0
 from test_reference_station import CONTRACT, base_transform, processed_reference_recording, read_prepared
 
-from annotations.cameras import alignment_plan
-from annotations.kinematics import flange_transform, orientation_xyzw
-from annotations.preparation import RecordingPreparer
-from annotations.reference_station import capture_time
+from recording_conversion.cameras import alignment_plan
+from recording_conversion.kinematics import flange_transform, orientation_xyzw
+from recording_conversion.preparation import RecordingPreparer
+from recording_conversion.reference_station import capture_time
 
 
 def test_saved_episode_task_overrides_inconsistent_embedded_task(tmp_path: Path) -> None:

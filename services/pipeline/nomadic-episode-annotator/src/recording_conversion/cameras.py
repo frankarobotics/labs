@@ -16,7 +16,7 @@ from mcap_protobuf.schema import register_schema
 from mcap_ros2.decoder import DecoderFactory as ROSDecoderFactory
 from pipeline_configs import CameraSegment
 
-from annotations.reference_station import capture_time
+from recording_conversion.reference_station import capture_time
 
 
 def camera_frame(role: str) -> str:

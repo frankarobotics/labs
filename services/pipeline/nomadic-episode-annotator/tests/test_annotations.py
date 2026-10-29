@@ -25,14 +25,14 @@ from mcap_protobuf.decoder import DecoderFactory
 from pipeline_episodes import EpisodeMetadata, EpisodeProcessed, EpisodeStatus, episode_directory
 from pydantic import SecretStr
 
-from annotations.config import AnnotationConfig, get_annotation_config
-from annotations.episodes import recording_path
-from annotations.models import AnnotationEvent, AnnotationJob
-from annotations.nomadic_client import NomadicGateway, annotation_events, primary_video, workbench_url
-from annotations.preparation import RecordingPreparer
-from annotations.router import router
-from annotations.service import AnnotationConflictError, AnnotationService, get_annotation_service
-from annotations.store import JobStore
+from adapters.nomadic_gateway import NomadicGateway, annotation_events, primary_video, workbench_url
+from configs.annotator import AnnotationConfig, get_annotation_config
+from handlers.annotations import router
+from jobs.episodes import recording_path
+from jobs.models import AnnotationEvent, AnnotationJob
+from jobs.service import AnnotationConflictError, AnnotationService, get_annotation_service
+from jobs.store import JobStore
+from recording_conversion.preparation import RecordingPreparer
 
 T0 = 1_700_000_000_000_000_000
 
@@ -891,18 +891,14 @@ def test_camera_timestamps_must_be_increasing(config: AnnotationConfig, tmp_path
     assert not prepared.exists()
 
 
-def test_paths_follow_existing_station_configuration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_paths_default_to_the_service_data_mounts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     for name in ["NOMADIC_PROCESSED_EPISODES_PATH", "NOMADIC_STATE_PATH"]:
         monkeypatch.delenv(name, raising=False)
-    processed = tmp_path / "station" / "processed"
-    monkeypatch.setattr(
-        "annotations.config.load_data_collection_config", lambda: SimpleNamespace(processed_data_path=processed)
-    )
     get_annotation_config.cache_clear()
     try:
         config = get_annotation_config()
-        assert config.processed_episodes_path == processed
-        assert config.state_path == processed.parent / "nomadic_annotations"
+        assert config.processed_episodes_path == Path("/workspace/data/processed_episodes")
+        assert config.state_path == Path("/workspace/data/nomadic_annotations")
         monkeypatch.setenv("NOMADIC_PROCESSED_EPISODES_PATH", str(tmp_path / "custom" / "processed"))
         monkeypatch.setenv("NOMADIC_STATE_PATH", str(tmp_path / "custom-state"))
         get_annotation_config.cache_clear()

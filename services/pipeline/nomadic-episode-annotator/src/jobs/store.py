@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from uuid import UUID
 
-from annotations.models import ACTIVE_STATES, AnnotationJob, now
+from jobs.models import ACTIVE_STATES, AnnotationJob, now
 
 
 class JobStoreError(Exception):

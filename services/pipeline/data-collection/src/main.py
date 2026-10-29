@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -13,8 +12,6 @@ from loguru import logger
 from pipeline_configs.cors import CORSConfig, load_cors_config
 from pipeline_configs.station import StationConfig, load_station_config
 
-from annotations.router import router as annotations_router
-from annotations.service import get_annotation_service
 from configs.data_collection import DataCollectionConfig, load_data_collection_config
 from configs.logger import LoggerConfig, load_logger_config
 from dependencies import (
@@ -58,8 +55,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
         yield
     finally:
-        if get_annotation_service.cache_info().currsize:
-            await asyncio.to_thread(get_annotation_service().close)
         logger.info("Exiting application lifespan: stopping device monitor")
         try:
             monitor.stop()
@@ -107,7 +102,6 @@ app.include_router(devices.router, tags=["Devices"])
 app.include_router(camera.router, tags=["Camera"])
 app.include_router(system.router, tags=["System"])
 app.include_router(tasks.router, tags=["Tasks"])
-app.include_router(annotations_router)
 
 
 @app.get("/", tags=["Root"])

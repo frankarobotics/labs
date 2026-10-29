@@ -21,9 +21,9 @@ from mcap_ros2.decoder import DecoderFactory
 from numpy.typing import NDArray
 from pipeline_configs import PolicyContract, PolicySegment, ROSMessageType
 
-from annotations.frames import recorded_arm_bases
-from annotations.kinematics import flange_transform, orientation_xyzw
-from annotations.signals import signal_type
+from recording_conversion.frames import recorded_arm_bases
+from recording_conversion.kinematics import flange_transform, orientation_xyzw
+from recording_conversion.signals import signal_type
 
 # robotiq_gripper_client.py documents this joint's URDF range: 0 open, 0.8 closed.
 KNUCKLE_MAX_RADIANS = 0.8

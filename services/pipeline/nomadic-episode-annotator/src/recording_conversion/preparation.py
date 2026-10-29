@@ -26,8 +26,8 @@ from mcap.writer import Writer
 from mcap_protobuf.decoder import DecoderFactory
 from pipeline_episodes import EPISODE_METADATA_FILE
 
-from annotations.cameras import CameraPlan, alignment_plan, camera_frame, write_calibrations
-from annotations.reference_station import ReferenceStationMapping
+from recording_conversion.cameras import CameraPlan, alignment_plan, camera_frame, write_calibrations
+from recording_conversion.reference_station import ReferenceStationMapping
 
 
 def file_digest(path: Path) -> str:

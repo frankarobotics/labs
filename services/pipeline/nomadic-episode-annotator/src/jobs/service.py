@@ -12,11 +12,12 @@ from pathlib import Path
 from typing import IO
 from uuid import UUID, uuid4
 
-from annotations.config import AnnotationConfig, get_annotation_config
-from annotations.episodes import recording_path
-from annotations.models import ACTIVE_STATES, AnnotationJob, AnnotationStatus
-from annotations.nomadic_client import NomadicGateway, annotation_events, primary_video, workbench_url
-from annotations.store import JobStore, JobStoreError
+from adapters.nomadic_gateway import NomadicGateway, annotation_events, primary_video, workbench_url
+from configs.annotator import AnnotationConfig, get_annotation_config
+from jobs.episodes import recording_path
+from jobs.models import ACTIVE_STATES, AnnotationJob, AnnotationStatus
+from jobs.store import JobStore, JobStoreError
+from recording_conversion.preparation import RecordingPreparer
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class AnnotationUnavailableError(Exception):
 
 
 class AnnotationService:
-    """Serialize expensive preparation/upload jobs independently of ROS requests."""
+    """Serialize expensive preparation/upload jobs on one worker, off the request threads."""
 
     def __init__(
         self, config: AnnotationConfig, gateway_factory: Callable[[AnnotationConfig], NomadicGateway] = NomadicGateway
@@ -190,8 +191,6 @@ class AnnotationService:
                 gateway = self.gateway_factory(self.config)
                 self._fetch(job, gateway)
                 return
-            from annotations.preparation import RecordingPreparer  # noqa: PLC0415 -- Optional dependencies stay lazy.
-
             job.state, job.message = "preparing", "Preparing cameras and robot signals."
             self._save(job)
             source = self._source(job.episode_id)
