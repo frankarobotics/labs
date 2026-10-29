@@ -12,7 +12,13 @@ function episodeId(request: Request) {
   return id
 }
 
-export async function loader({ request, context: { DATA_COLLECTION_URL: base } }: Route.LoaderArgs) {
+function annotator(base: URL | null) {
+  if (!base) throw data({ error: 'Nomadic annotations are not configured.' }, { status: 404 })
+  return base
+}
+
+export async function loader({ request, context: { NOMADIC_EPISODE_ANNOTATOR_URL } }: Route.LoaderArgs) {
+  const base = annotator(NOMADIC_EPISODE_ANNOTATOR_URL)
   const id = episodeId(request)
   if (new URL(request.url).searchParams.has('download')) {
     const response = await fetch(annotationUrl(base, id, true), { signal: AbortSignal.timeout(10000) })
@@ -27,7 +33,8 @@ export async function loader({ request, context: { DATA_COLLECTION_URL: base } }
   return data({ status: await annotationStatus(base, id) }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
-export async function action({ request, context: { DATA_COLLECTION_URL: base } }: Route.ActionArgs) {
+export async function action({ request, context: { NOMADIC_EPISODE_ANNOTATOR_URL } }: Route.ActionArgs) {
+  const base = annotator(NOMADIC_EPISODE_ANNOTATOR_URL)
   const id = episodeId(request)
   const intent = (await request.formData()).get('intent')
   const target = annotationUrl(base, id)

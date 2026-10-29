@@ -19,7 +19,7 @@ import type { Route } from './+types/index'
 
 export async function loader({
   params: { episode_id },
-  context: { DATA_COLLECTION_CLIENT: client, DATA_COLLECTION_URL: url },
+  context: { DATA_COLLECTION_CLIENT: client, DATA_COLLECTION_URL: url, NOMADIC_EPISODE_ANNOTATOR_URL: annotatorUrl },
 }: Route.LoaderArgs) {
   const episode = await unwrapOrThrow(
     client.GET('/api/v1/episodes/{episode_id}', {
@@ -52,7 +52,7 @@ export async function loader({
     .toSorted((a, b) => compareDeviceDirectionNames(a.id, b.id))
 
   return {
-    annotations: await annotationStatus(url, episode_id),
+    annotations: annotatorUrl && (await annotationStatus(annotatorUrl, episode_id)),
     episode: {
       id: episode.episode_id,
       dateTimeIso: episode.created_at,
@@ -84,7 +84,7 @@ export default function Episode({
           <WebsocketCanvas key={wsUrl} status={status} name={name} url={wsUrl} />
         ))}
       </div>
-      {annotations.enabled && (
+      {annotations?.enabled && (
         <>
           <Separator />
           <EpisodeAnnotations id={id} initialStatus={annotations} />
