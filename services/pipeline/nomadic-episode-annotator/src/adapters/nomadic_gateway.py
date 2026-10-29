@@ -2,13 +2,13 @@
 
 import math
 from typing import Any
-from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 from uuid import NAMESPACE_URL, uuid5
 
 import nomadic  # type: ignore[import-untyped]
 
 from configs.annotator import AnnotationConfig
 from jobs.models import AnnotationEvent
+from jobs.ports import IndexResult
 
 
 class NomadicGateway:
@@ -29,26 +29,43 @@ class NomadicGateway:
             self.client.session.close()
             raise ValueError("Install the supported Nomadic SDK with robotics indexing support.") from exc
 
-    def upload(self, path: str) -> dict[str, Any]:
+    def upload(self, path: str) -> str:
         """Return the ingest identifier before waiting for MCAP processing."""
-        return dict(self.client.upload(path, folder=self.config.folder, wait_for_uploaded=False, index_data=False))
+        response = dict(self.client.upload(path, folder=self.config.folder, wait_for_uploaded=False, index_data=False))
+        ingest_id = response.get("mcap_ingest_id")
+        if not ingest_id:
+            raise ValueError("The SDK did not return an MCAP ingest identifier.")
+        return str(ingest_id)
 
-    def ingest(self, ingest_id: str) -> dict[str, Any]:
-        """Wait for MCAP ingestion to complete."""
-        return dict(self.client.video.wait_for_mcap_ingest(ingest_id, timeout=self.config.timeout_seconds))
+    def ingest(self, ingest_id: str) -> str:
+        """Wait for MCAP ingestion to complete and resolve its primary view."""
+        return primary_video(
+            dict(self.client.video.wait_for_mcap_ingest(ingest_id, timeout=self.config.timeout_seconds))
+        )
 
-    def index(self, video_id: str) -> dict[str, Any]:
+    def index(self, video_id: str) -> IndexResult:
         """Run robotics indexing for the primary camera view."""
         results = self.client.index([video_id], mode="robotics", timeout=self.config.timeout_seconds)
-        return dict(results[video_id])
+        result = dict(results[video_id])
+        return IndexResult(
+            completed=result.get("status") == "completed",
+            batch_id=result.get("batch_id"),
+            run_id=result.get("run_id"),
+            analysis_id=result.get("analysis_id"),
+            video_id=result.get("index_video_id"),
+            has_warnings=bool(result.get("warnings")),
+        )
 
-    def analysis(self, video_id: str, analysis_id: str) -> dict[str, Any]:
-        """Retrieve original events to preserve fractional times and structured fields."""
-        return dict(self.client.video.get_video_analysis(video_id, analysis_id))
-
-    def batch(self, batch_id: str) -> dict[str, Any]:
+    def analysis_id(self, batch_id: str, video_id: str) -> str | None:
         """Resolve a saved analysis pointer without creating another indexing job."""
-        return dict(self.client.get_batch_analysis(batch_id))
+        batch = dict(self.client.get_batch_analysis(batch_id))
+        return next(
+            (row.get("analysis_id") for row in batch.get("results", []) if row.get("video_id") == video_id), None
+        )
+
+    def events(self, video_id: str, analysis_id: str) -> list[AnnotationEvent]:
+        """Retrieve original events to preserve fractional times and structured fields."""
+        return annotation_events(dict(self.client.video.get_video_analysis(video_id, analysis_id)), analysis_id)
 
     def close(self) -> None:
         """Release the SDK's HTTP connection pool."""
@@ -70,16 +87,6 @@ def primary_video(payload: dict[str, Any]) -> str:
     if not isinstance(primary, str) or not primary:
         raise ValueError("Nomadic did not identify a primary camera view.")
     return primary
-
-
-def workbench_url(dashboard_url: str, batch_id: str | None, video_id: str) -> str:
-    """Build a Workbench link for the saved recording."""
-    parsed = urlsplit(dashboard_url)
-    if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password:
-        raise ValueError("The Nomadic dashboard address must be an HTTPS URL without credentials.")
-    target = quote(batch_id, safe="") if batch_id else f"videos/{quote(video_id, safe='')}"
-    path = f"{parsed.path.rstrip('/')}/workbench/{target}"
-    return urlunsplit((parsed.scheme, parsed.netloc, path, urlencode({"video": video_id}), ""))
 
 
 def _seconds(value: object) -> float:

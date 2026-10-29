@@ -5,8 +5,10 @@ import pytest
 import uuid7
 from fastapi.testclient import TestClient
 
+from adapters.nomadic_gateway import NomadicGateway
 from configs.annotator import get_annotation_config
-from jobs.service import AnnotationService, AnnotationUnavailableError, get_annotation_service
+from dependencies import get_annotation_service
+from jobs.service import AnnotationService, AnnotationUnavailableError
 from main import app
 
 
@@ -28,7 +30,7 @@ def test_lifespan_starts_the_worker_and_releases_it_on_shutdown(station: Path) -
         response = client.get(f"/api/v1/episodes/{uuid7.create()}/annotations")
         assert response.status_code == 200
         assert response.json()["enabled"] is True
-    successor = AnnotationService(get_annotation_config())
+    successor = AnnotationService(get_annotation_config(), NomadicGateway)
     try:
         successor.start()
         assert successor.store is not None

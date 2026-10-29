@@ -4,18 +4,17 @@ import fcntl
 import logging
 import queue
 import threading
-from collections.abc import Callable
 from contextlib import suppress
-from functools import lru_cache
 from pathlib import Path
 from typing import IO
 from uuid import UUID, uuid4
 
-from adapters.nomadic_gateway import NomadicGateway, annotation_events, primary_video, workbench_url
-from configs.annotator import AnnotationConfig, get_annotation_config
+from configs.annotator import AnnotationConfig
 from jobs.episodes import recording_path
 from jobs.models import ACTIVE_STATES, AnnotationJob, AnnotationStatus
+from jobs.ports import AnnotationGateway, GatewayFactory
 from jobs.store import JobStore, JobStoreError
+from jobs.workbench import workbench_url
 from recording_conversion.preparation import RecordingPreparer
 
 logger = logging.getLogger(__name__)
@@ -32,9 +31,7 @@ class AnnotationUnavailableError(Exception):
 class AnnotationService:
     """Serialize expensive preparation/upload jobs on one worker, off the request threads."""
 
-    def __init__(
-        self, config: AnnotationConfig, gateway_factory: Callable[[AnnotationConfig], NomadicGateway] = NomadicGateway
-    ) -> None:
+    def __init__(self, config: AnnotationConfig, gateway_factory: GatewayFactory) -> None:
         """Create a dormant service; disabled instances perform no filesystem or network work."""
         self.config = config
         self.gateway_factory = gateway_factory
@@ -162,22 +159,18 @@ class AnnotationService:
             self._queue.put_nowait(job)
             return job
 
-    def _fetch(self, job: AnnotationJob, gateway: NomadicGateway) -> None:
+    def _fetch(self, job: AnnotationJob, gateway: AnnotationGateway) -> None:
         if job.video_id is None:
             raise ValueError("The Nomadic video identifier is missing.")
         job.viewer_url = workbench_url(self.config.dashboard_url, job.batch_id, job.video_id)
         job.state, job.message = "fetching", "Loading action annotations."
         self._save(job)
         if not job.analysis_id and job.batch_id:
-            batch = gateway.batch(job.batch_id)
-            job.analysis_id = next(
-                (row.get("analysis_id") for row in batch.get("results", []) if row.get("video_id") == job.video_id),
-                None,
-            )
+            job.analysis_id = gateway.analysis_id(job.batch_id, job.video_id)
             self._save(job)
         if not job.analysis_id:
             raise ValueError("The remote analysis has not been created yet.")
-        job.events = annotation_events(gateway.analysis(job.video_id, job.analysis_id), job.analysis_id)
+        job.events = gateway.events(job.video_id, job.analysis_id)
         job.state, job.message = "completed", f"{len(job.events)} action windows available."
         self._save(job)
 
@@ -202,14 +195,11 @@ class AnnotationService:
             stage = "uploading"
             job.state, job.message, job.remote_started = "uploading", "Uploading recording to Nomadic.", True
             self._save(job)
-            upload = gateway.upload(str(prepared))
-            job.ingest_id = upload.get("mcap_ingest_id")
-            if not job.ingest_id:
-                raise ValueError("The SDK did not return an MCAP ingest identifier.")
+            job.ingest_id = gateway.upload(str(prepared))
             job.state, job.message = "ingesting", "Nomadic is processing the recording."
             stage = "ingesting"
             self._save(job)
-            job.video_id = primary_video(gateway.ingest(job.ingest_id))
+            job.video_id = gateway.ingest(job.ingest_id)
             job.state, job.message = "indexing", "Analyzing robotic actions."
             stage = "indexing"
             self._save(job)
@@ -232,19 +222,19 @@ class AnnotationService:
             with suppress(OSError):
                 prepared.unlink(missing_ok=True)
 
-    def _index(self, job: AnnotationJob, gateway: NomadicGateway) -> None:
+    def _index(self, job: AnnotationJob, gateway: AnnotationGateway) -> None:
         """Save returned references before checking whether indexing completed."""
         if job.video_id is None:
             raise ValueError("The Nomadic video identifier is missing.")
         result = gateway.index(job.video_id)
-        job.batch_id = result.get("batch_id")
-        job.index_run_id = result.get("run_id")
-        job.analysis_id = result.get("analysis_id")
-        job.video_id = result.get("index_video_id") or job.video_id
+        job.batch_id = result.batch_id
+        job.index_run_id = result.run_id
+        job.analysis_id = result.analysis_id
+        job.video_id = result.video_id or job.video_id
         self._save(job)
-        if result.get("status") != "completed":
+        if not result.completed:
             raise ValueError("Indexing has not completed.")
-        if result.get("warnings"):
+        if result.has_warnings:
             job.warnings.append("Some supporting evidence was unavailable; review the Nomadic analysis.")
 
     def _failure_message(self, stage: str, exc: Exception) -> str:
@@ -310,9 +300,3 @@ class AnnotationService:
         # process must not claim ownership while this worker can still write.
         if self._lock_file and (self._worker is None or not self._worker.is_alive()):
             self._lock_file.close()
-
-
-@lru_cache
-def get_annotation_service() -> AnnotationService:
-    """Return this process's optional annotation worker."""
-    return AnnotationService(get_annotation_config())

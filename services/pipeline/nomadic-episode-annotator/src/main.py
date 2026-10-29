@@ -6,8 +6,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from dependencies import get_annotation_service
 from handlers.annotations import router
-from jobs.service import get_annotation_service
 
 
 @asynccontextmanager

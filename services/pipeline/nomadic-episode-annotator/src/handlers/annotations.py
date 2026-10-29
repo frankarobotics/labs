@@ -4,13 +4,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 
+from dependencies import get_annotation_service
 from jobs.models import AnnotationJob, AnnotationStatus
-from jobs.service import (
-    AnnotationConflictError,
-    AnnotationService,
-    AnnotationUnavailableError,
-    get_annotation_service,
-)
+from jobs.service import AnnotationConflictError, AnnotationService, AnnotationUnavailableError
 from jobs.store import JobStoreError
 
 router = APIRouter(prefix="/api/v1/episodes/{episode_id}/annotations", tags=["Annotations"])
