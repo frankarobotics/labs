@@ -18,6 +18,8 @@
   instead of shifting every later segment in the flat vectors.
 - Fixed dataset-builder deleting files it did not write when a build failed. It now builds into a hidden
   `.<name>.*.partial` directory beside `--output` and moves the dataset into place only once complete.
+- Fixed the `franka-robot` image build by updating `franka_ros2` from v3.5.3 to v3.6.1, and applied the same update to
+  `controller-coordinator`.
 
 ### Migration notes
 
