@@ -1,7 +1,6 @@
 """Bounded background annotation jobs with explicit interruption semantics."""
 
 import fcntl
-import importlib.util
 import logging
 import queue
 import threading
@@ -52,8 +51,6 @@ class AnnotationService:
             return "Nomadic annotations are not enabled for this station."
         if not self.config.api_key.get_secret_value():
             return "The station's Nomadic API key is not configured."
-        if any(importlib.util.find_spec(name) is None for name in ("nomadic", "av", "mcap_protobuf")):
-            return "Install the Nomadic integration dependencies on the data-collection service."
         try:
             workbench_url(self.config.dashboard_url, "batch", "video")
         except ValueError as exc:
@@ -89,13 +86,17 @@ class AnnotationService:
             self._worker = threading.Thread(target=self._work, name="nomadic-annotations", daemon=True)
             self._worker.start()
 
+    def _running_store(self) -> JobStore:
+        if self.store is None:
+            raise AnnotationUnavailableError("The annotation worker is not running. Check the annotator's logs.")
+        return self.store
+
     def status(self, episode_id: UUID) -> AnnotationStatus:
-        """Read the latest persisted result, starting the worker only when enabled."""
+        """Read the latest persisted result without side effects."""
         reason = self.unavailable_reason()
         if reason:
             return AnnotationStatus(enabled=self.config.enabled, message=reason)
-        self.start()
-        job = self.store.latest(episode_id) if self.store else None
+        job = self._running_store().latest(episode_id)
         status = AnnotationStatus(enabled=True, message="", job=job)
         if job and job.video_id:
             job.viewer_url = workbench_url(self.config.dashboard_url, job.batch_id, job.video_id)
@@ -113,11 +114,11 @@ class AnnotationService:
         """Queue one explicitly requested upload, never automatically retrying remote work."""
         if reason := self.unavailable_reason():
             raise ValueError(reason)
-        self.start()
         with self._guard:
-            if self.store is None or self._stop.is_set():
+            store = self._running_store()
+            if self._stop.is_set():
                 raise AnnotationConflictError("The annotation worker is stopping.")
-            previous = self.store.latest(episode_id)
+            previous = store.latest(episode_id)
             if previous and previous.state in ACTIVE_STATES:
                 return previous
             if previous and (previous.remote_started or previous.state == "completed"):
@@ -128,7 +129,7 @@ class AnnotationService:
                 raise AnnotationConflictError("The annotation queue is full. Try again after the current jobs finish.")
             self._source(episode_id)
             job = AnnotationJob(job_id=uuid4(), episode_id=episode_id)
-            self.store.save(job)
+            store.save(job)
             self._queue.put_nowait(job)
             return job
 
@@ -148,9 +149,8 @@ class AnnotationService:
         """Retry retrieval of known remote work, without another upload or analysis."""
         if reason := self.unavailable_reason():
             raise AnnotationConflictError(reason)
-        self.start()
         with self._guard:
-            job = self.store.latest(episode_id) if self.store else None
+            job = self._running_store().latest(episode_id)
             if not job or not job.video_id or not (job.analysis_id or job.batch_id):
                 raise AnnotationConflictError("No remote analysis reference is available to refresh.")
             if job.state in ACTIVE_STATES or job.state == "completed":

@@ -12,12 +12,13 @@ from jobs.service import get_annotation_service
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
-    """Close the worker if a request started it."""
+    """Own the single annotation worker for the process lifetime."""
+    service = get_annotation_service()
+    service.start()
     try:
         yield
     finally:
-        if get_annotation_service.cache_info().currsize:
-            await asyncio.to_thread(get_annotation_service().close)
+        await asyncio.to_thread(service.close)
 
 
 app = FastAPI(title="Nomadic Episode Annotator", lifespan=lifespan)

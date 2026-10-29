@@ -5,6 +5,7 @@ import io
 import json
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, ClassVar
@@ -30,7 +31,12 @@ from configs.annotator import AnnotationConfig, get_annotation_config
 from handlers.annotations import router
 from jobs.episodes import recording_path
 from jobs.models import AnnotationEvent, AnnotationJob
-from jobs.service import AnnotationConflictError, AnnotationService, get_annotation_service
+from jobs.service import (
+    AnnotationConflictError,
+    AnnotationService,
+    AnnotationUnavailableError,
+    get_annotation_service,
+)
 from jobs.store import JobStore
 from recording_conversion.preparation import RecordingPreparer
 
@@ -212,7 +218,7 @@ def test_preparation_failure_never_uploads(config: AnnotationConfig) -> None:
     assert config.spec_path is not None
     config.spec_path.write_text(json.dumps(spec))
     FakeGateway.calls = []
-    service = AnnotationService(config, FakeGateway)
+    service = started(AnnotationService(config, FakeGateway))
     try:
         service.submit(episode)
         failed = wait_for_job(service, episode, "failed")
@@ -374,6 +380,11 @@ class FakeGateway(NomadicGateway):
         pass
 
 
+def started(service: AnnotationService) -> AnnotationService:
+    service.start()
+    return service
+
+
 def wait_for_job(service: AnnotationService, episode: UUID, state: str) -> AnnotationJob:
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
@@ -389,7 +400,7 @@ def test_full_job_is_background_deduplicated_persisted_and_downloadable(config: 
     FakeGateway.calls = []
     FakeGateway.uploaded.clear()
     FakeGateway.finish.clear()
-    service = AnnotationService(config, FakeGateway)
+    service = started(AnnotationService(config, FakeGateway))
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_annotation_service] = lambda: service
@@ -443,7 +454,7 @@ def test_recovery_retains_remote_ids_and_blocks_duplicate_upload(config: Annotat
         ingest_id="ingest-1",
     )
     store.save(interrupted)
-    service = AnnotationService(config, FakeGateway)
+    service = started(AnnotationService(config, FakeGateway))
     try:
         job = service.status(episode).job
         assert job.state == "interrupted" and job.video_id == "main-view"
@@ -471,7 +482,7 @@ def test_remote_failure_is_redacted_and_cannot_duplicate_submission(config: Anno
 
     episode, _ = saved_episode(config)
     FakeGateway.finish.set()
-    service = AnnotationService(config, FailingGateway)
+    service = started(AnnotationService(config, FailingGateway))
     try:
         service.submit(episode)
         interrupted = wait_for_job(service, episode, "interrupted")
@@ -501,7 +512,7 @@ def test_refresh_never_reuploads_or_reindexes(config: AnnotationConfig) -> None:
     )
     store.save(job)
     FakeGateway.calls = []
-    service = AnnotationService(config, FakeGateway)
+    service = started(AnnotationService(config, FakeGateway))
     try:
         assert service.refresh(episode).job_id == job.job_id
         result = wait_for_job(service, episode, "completed")
@@ -629,7 +640,7 @@ def test_processing_must_finish_before_submission(config: AnnotationConfig) -> N
     episode, source = saved_episode(config)
     marker = source.parent / ".processing_complete"
     marker.unlink()
-    service = AnnotationService(config, FakeGateway)
+    service = started(AnnotationService(config, FakeGateway))
     try:
         status = service.status(episode)
         assert status.enabled and not status.can_submit
@@ -658,7 +669,7 @@ def test_completed_result_survives_deleted_source_and_mapping(config: Annotation
     store.save(job)
     source.unlink()
     config.spec_path.unlink()
-    service = AnnotationService(config, FakeGateway)
+    service = started(AnnotationService(config, FakeGateway))
     try:
         status = service.status(episode)
         assert status.job is not None and status.job.events == job.events
@@ -694,7 +705,7 @@ def test_failures_are_actionable_and_do_not_leak_credentials(
     episode, _ = saved_episode(config)
     FakeGateway.finish.set()
     FakeGateway.calls = []
-    service = AnnotationService(config, BrokenGateway)
+    service = started(AnnotationService(config, BrokenGateway))
     try:
         service.submit(episode)
         job = wait_for_job(service, episode, "failed" if phase == "connecting" else "interrupted")
@@ -722,7 +733,7 @@ def test_partial_index_result_can_be_refreshed_without_resubmission(config: Anno
     episode, _ = saved_episode(config)
     FakeGateway.calls = []
     FakeGateway.finish.set()
-    service = AnnotationService(config, PendingGateway)
+    service = started(AnnotationService(config, PendingGateway))
     try:
         service.submit(episode)
         job = wait_for_job(service, episode, "interrupted")
@@ -741,7 +752,7 @@ def test_timeout_run_reference_is_not_treated_as_a_batch(config: AnnotationConfi
 
     episode, _ = saved_episode(config)
     FakeGateway.finish.set()
-    service = AnnotationService(config, TimedOutGateway)
+    service = started(AnnotationService(config, TimedOutGateway))
     try:
         service.submit(episode)
         job = wait_for_job(service, episode, "interrupted")
@@ -760,7 +771,7 @@ def test_queue_is_bounded_while_an_upload_is_running(config: AnnotationConfig) -
     episodes = [saved_episode(config)[0] for _ in range(3)]
     FakeGateway.uploaded.clear()
     FakeGateway.finish.clear()
-    service = AnnotationService(config, FakeGateway)
+    service = started(AnnotationService(config, FakeGateway))
     try:
         service.submit(episodes[0])
         assert FakeGateway.uploaded.wait(5)
@@ -780,7 +791,7 @@ def test_local_preparation_can_be_retried_without_remote_work(config: Annotation
     config.spec_path.write_text(json.dumps(spec))
     FakeGateway.calls = []
     FakeGateway.finish.set()
-    service = AnnotationService(config, FakeGateway)
+    service = started(AnnotationService(config, FakeGateway))
     try:
         first = service.submit(episode)
         assert not wait_for_job(service, episode, "failed").remote_started
@@ -803,7 +814,7 @@ def test_invalid_recording_is_rejected_before_submission(config: AnnotationConfi
         path.with_name("second.mcap").write_bytes(path.read_bytes())
     else:
         config.max_recording_bytes = 1
-    service = AnnotationService(config, FakeGateway)
+    service = started(AnnotationService(config, FakeGateway))
     try:
         assert not service.status(episode).can_submit
         with pytest.raises(ValueError):
@@ -820,7 +831,7 @@ def test_empty_result_can_be_completed_and_downloaded(config: AnnotationConfig) 
 
     episode, _ = saved_episode(config)
     FakeGateway.finish.set()
-    service = AnnotationService(config, EmptyGateway)
+    service = started(AnnotationService(config, EmptyGateway))
     try:
         service.submit(episode)
         assert wait_for_job(service, episode, "completed").events == []
@@ -830,13 +841,30 @@ def test_empty_result_can_be_completed_and_downloaded(config: AnnotationConfig) 
 
 def test_storage_failure_is_reported_without_initializing_sdk(config: AnnotationConfig) -> None:
     config.state_path.write_text("not a directory")
+    with pytest.raises(AnnotationUnavailableError, match="storage is unavailable"):
+        AnnotationService(config, FakeGateway).start()
+
+
+def test_status_never_starts_the_worker(config: AnnotationConfig) -> None:
+    episode, _ = saved_episode(config)
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_annotation_service] = lambda: AnnotationService(config, FakeGateway)
     with TestClient(app) as client:
-        response = client.get(f"/api/v1/episodes/{uuid7.create()}/annotations")
+        response = client.get(f"/api/v1/episodes/{episode}/annotations")
     assert response.status_code == 503
-    assert "storage is unavailable" in response.json()["detail"]
+    assert "not running" in response.json()["detail"]
+    assert not config.state_path.exists()
+
+
+@pytest.mark.parametrize("request_work", [AnnotationService.submit, AnnotationService.refresh])
+def test_work_requests_never_start_the_worker(
+    config: AnnotationConfig, request_work: Callable[[AnnotationService, UUID], AnnotationJob]
+) -> None:
+    episode, _ = saved_episode(config)
+    with pytest.raises(AnnotationUnavailableError, match="not running"):
+        request_work(AnnotationService(config, FakeGateway), episode)
+    assert not config.state_path.exists()
 
 
 def test_workbench_link_preserves_recording_and_custom_dashboard() -> None:
@@ -927,7 +955,7 @@ def test_explicit_or_embedded_spec_does_not_require_unused_contract(config: Anno
     embedded = tmp_path / "embedded.mcap"
     RecordingPreparer(None, config.policy_contract_path).prepare(explicit, embedded, episode)
     assert embedded.is_file()
-    service = AnnotationService(config)
+    service = started(AnnotationService(config))
     try:
         assert service.status(episode).can_submit
     finally:
