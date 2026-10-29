@@ -1,21 +1,17 @@
 """Resolve completed recordings without importing ROS-dependent services."""
 
-from datetime import datetime
 from pathlib import Path
 from uuid import UUID
 
-import uuid7  # type: ignore[import-untyped]
+from pipeline_episodes import (
+    EPISODE_METADATA_FILE,
+    PROCESSING_COMPLETE_MARKER,
+    EpisodeMetadata,
+    EpisodeStatus,
+    episode_directory,
+)
 
 from annotations.config import AnnotationConfig
-from models.episode import EpisodeMetadata, EpisodeStatus
-
-
-def episode_directory(root: Path, episode_id: UUID) -> Path:
-    """Use the existing UUIDv7 date layout."""
-    if episode_id.version != 7:  # noqa: PLR2004
-        raise ValueError("An episode must have a UUIDv7 identifier.")
-    date: datetime = uuid7.time(episode_id)
-    return root / date.strftime("%Y/%m/%d") / str(episode_id)
 
 
 def recording_path(config: AnnotationConfig, episode_id: UUID) -> Path:
@@ -24,8 +20,8 @@ def recording_path(config: AnnotationConfig, episode_id: UUID) -> Path:
     directory = episode_directory(root, episode_id)
     if not directory.resolve().is_relative_to(root.resolve()):
         raise ValueError("The episode directory must remain inside the configured data directory.")
-    metadata_path = directory / "episode_metadata.json"
-    if not metadata_path.exists() or not (directory / ".processing_complete").is_file():
+    metadata_path = directory / EPISODE_METADATA_FILE
+    if not metadata_path.exists() or not (directory / PROCESSING_COMPLETE_MARKER).is_file():
         raise FileNotFoundError("The recording is not ready. Wait for LABS to finish processing the saved episode.")
     if not metadata_path.resolve().is_relative_to(directory.resolve()):
         raise ValueError("Episode metadata must remain inside the episode directory.")

@@ -24,6 +24,7 @@ from mcap.records import Channel, Message, Schema
 from mcap.summary import Summary
 from mcap.writer import Writer
 from mcap_protobuf.decoder import DecoderFactory
+from pipeline_episodes import EPISODE_METADATA_FILE
 
 from annotations.cameras import CameraPlan, alignment_plan, camera_frame, write_calibrations
 from annotations.reference_station import ReferenceStationMapping
@@ -141,14 +142,14 @@ def _video_packets(
 
 def _record_provenance(source: Path, episode_id: UUID, spec: dict[str, Any], plans: dict[str, CameraPlan]) -> None:
     """Prefer the saved episode metadata and record every temporal adjustment."""
-    episode_file = source.parent.parent / "episode_metadata.json"
+    episode_file = source.parent.parent / EPISODE_METADATA_FILE
     if episode_file.is_file():
         episode = json.loads(episode_file.read_text())
         if episode.get("episode_id") != str(episode_id):
             raise ValueError("Episode metadata does not match the recording being prepared.")
         if instruction := episode.get("task_description"):
             spec["recording"]["task"] = {"instruction": instruction}
-        spec.setdefault("source", {})["task_metadata_origin"] = "episode_metadata.json"
+        spec.setdefault("source", {})["task_metadata_origin"] = EPISODE_METADATA_FILE
     if plans:
         spec.setdefault("source", {})["camera_alignment"] = {
             topic: {

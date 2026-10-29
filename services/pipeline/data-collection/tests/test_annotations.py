@@ -22,17 +22,17 @@ from google.protobuf.message import Message
 from mcap.reader import make_reader
 from mcap.writer import Writer
 from mcap_protobuf.decoder import DecoderFactory
+from pipeline_episodes import EpisodeMetadata, EpisodeProcessed, EpisodeStatus, episode_directory
 from pydantic import SecretStr
 
 from annotations.config import AnnotationConfig, get_annotation_config
-from annotations.episodes import episode_directory, recording_path
+from annotations.episodes import recording_path
 from annotations.models import AnnotationEvent, AnnotationJob
 from annotations.nomadic_client import NomadicGateway, annotation_events, primary_video, workbench_url
 from annotations.preparation import RecordingPreparer
 from annotations.router import router
 from annotations.service import AnnotationConflictError, AnnotationService, get_annotation_service
 from annotations.store import JobStore
-from models.episode import EpisodeMetadata, EpisodeProcessed, EpisodeStatus
 
 T0 = 1_700_000_000_000_000_000
 

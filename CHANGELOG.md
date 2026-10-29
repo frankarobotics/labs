@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.3.0] - UNRELEASED
+
+- Episode metadata models, device enums and the on-disk episode layout moved from data-collection into a shared
+  `pipeline-episodes` package, so other pipeline services can read episodes without depending on data-collection.
+
 ## [0.2.1] - 2026-09-10
 
 - Fixed sporadic `libfranka: incorrect object size` errors that aborted one or both arms on roughly half of all

@@ -11,20 +11,20 @@ from datetime import datetime
 from pathlib import Path
 from uuid import UUID
 
-import uuid7  # type: ignore[import-untyped]
 from loguru import logger
 from pipeline_configs.station import StationConfig
-
-from configs.tasks import Task
-from models.episode import (
+from pipeline_episodes import (
+    EPISODE_METADATA_FILE,
     DeviceInfo,
-    EpisodeDeleteResponse,
     EpisodeLabel,
     EpisodeMetadata,
     EpisodeProcessed,
-    EpisodeResponse,
     EpisodeStatus,
+    episode_directory,
 )
+
+from configs.tasks import Task
+from models.episode import EpisodeDeleteResponse, EpisodeResponse
 from models.record import RecordResponse
 from repos.data_recorder import DataRecorderRepo
 from repos.devices import DeviceRecord, DeviceRepo
@@ -67,7 +67,7 @@ class EpisodeService:
     def _resolve_metadata(self, md: EpisodeMetadata) -> EpisodeMetadata:
         """Return processed episode_metadata.json if available, otherwise the raw metadata."""
         try:
-            processed_meta_path = self._get_processed_episode_path(md.episode_id) / "episode_metadata.json"
+            processed_meta_path = self._get_processed_episode_path(md.episode_id) / EPISODE_METADATA_FILE
             if processed_meta_path.exists():
                 return EpisodeMetadata(**json.loads(processed_meta_path.read_text()))
         except Exception as e:
@@ -207,8 +207,7 @@ class EpisodeService:
 
     def _get_processed_episode_path(self, episode_id: UUID) -> Path:
         """Resolve the processed episode directory path from a UUIDv7-based episode_id."""
-        dt: datetime = uuid7.time(episode_id)
-        return self.processed_data_path / dt.strftime("%Y") / dt.strftime("%m") / dt.strftime("%d") / str(episode_id)
+        return episode_directory(self.processed_data_path, episode_id)
 
     def delete_episode(self, episode_id: UUID) -> EpisodeDeleteResponse:
         """Delete an episode by id.

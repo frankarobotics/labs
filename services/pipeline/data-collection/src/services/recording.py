@@ -9,8 +9,8 @@ from uuid import UUID
 
 import uuid7  # type: ignore[import-untyped]
 from loguru import logger
+from pipeline_episodes import EpisodeLabel
 
-from models.episode import EpisodeLabel
 from models.recording import (
     DiscardRecordingResponse,
     SaveRecordingResponse,

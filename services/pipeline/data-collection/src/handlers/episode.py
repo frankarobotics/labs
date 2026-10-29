@@ -7,12 +7,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
+from pipeline_episodes import EpisodeProcessed
 
 from dependencies import get_episode_service
 from models.episode import (
     EpisodeDeleteResponse,
     EpisodePatchRequest,
-    EpisodeProcessed,
     EpisodeResponse,
 )
 from services.episode import EpisodeService

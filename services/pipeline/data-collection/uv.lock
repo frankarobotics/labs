@@ -225,6 +225,7 @@ dependencies = [
     { name = "numpy" },
     { name = "opencv-python-headless" },
     { name = "pipeline-configs" },
+    { name = "pipeline-episodes" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pydantic-yaml" },
@@ -274,6 +275,7 @@ requires-dist = [
     { name = "numpy", specifier = "<2" },
     { name = "opencv-python-headless", specifier = ">=4.11.0.86" },
     { name = "pipeline-configs", editable = "../packages/pipeline-configs" },
+    { name = "pipeline-episodes", editable = "../packages/pipeline-episodes" },
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pydantic-settings", specifier = ">=2.10.1" },
     { name = "pydantic-yaml", specifier = ">=1.5.1" },
@@ -684,6 +686,29 @@ dev = [
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "ruff", specifier = ">=0.12.9" },
     { name = "types-pyyaml", specifier = ">=6.0.12" },
+]
+
+[[package]]
+name = "pipeline-episodes"
+version = "0.1.0"
+source = { editable = "../packages/pipeline-episodes" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "uuid7-standard" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.11.7" },
+    { name = "uuid7-standard", specifier = ">=1.1.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mypy", specifier = ">=1.17.1" },
+    { name = "pytest", specifier = ">=8.4.1" },
+    { name = "pytest-cov", specifier = ">=6.2.1" },
+    { name = "ruff", specifier = ">=0.12.9" },
 ]
 
 [[package]]

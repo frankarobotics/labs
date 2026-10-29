@@ -16,6 +16,7 @@ dependencies = [
     "numpy<2",
     "opencv-python-headless>=4.11.0.86",
     "pipeline-configs",
+    "pipeline-episodes",
     "pydantic>=2.11.7",
     "pydantic-settings>=2.10.1",
     "pydantic-yaml>=1.5.1",
@@ -29,6 +30,7 @@ dependencies = [
 
 [tool.uv.sources]
 pipeline-configs = { path = "../packages/pipeline-configs", editable = true }
+pipeline-episodes = { path = "../packages/pipeline-episodes", editable = true }
 
 [project.optional-dependencies]
 nomadic = [

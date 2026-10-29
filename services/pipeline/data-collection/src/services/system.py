@@ -8,8 +8,8 @@ import docker
 from docker.errors import DockerException
 from loguru import logger
 from pipeline_configs.station import StationConfig
+from pipeline_episodes import EpisodeMetadata
 
-from models.episode import EpisodeMetadata
 from models.system import ActiveEpisode, SystemGetResponse
 from repos.episodes import EpisodeRepo
 from state_machine.franka_workflow import FrankaWorkflowStateMachine
