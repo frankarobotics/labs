@@ -35,11 +35,12 @@ Each deployment folder contains:
 
 | File                | Description                                                        |
 | ------------------- | ------------------------------------------------------------------ |
-| `.env.example`      | Template for environment variables (rename to `.env` to customize `DATA_ROOT` path) |
+| `.env.example`      | Template for environment variables (rename to `.env` to customize `DATA_ROOT` or select [optional services](#optional-services)) |
 | `cyclonedds.xml`    | CycloneDDS configuration for ROS 2 communication                  |
 | `docker-compose.yml`| Compose services and volume mounts for the deployment             |
 | `Taskfile.yml`      | Station-specific helper tasks for build/start/stop flows          |
 | `Tiltfile`          | Tilt live-reload workflow                                         |
+| `docker-compose.<name>.yml` | Override adding an [optional service](#optional-services)  |
 
 ## Services
 
@@ -188,6 +189,30 @@ other_topics:
     config:
       topics: [/left/ft_sensor/wrench]
 ```
+
+### Optional Services
+
+Optional services are compose overrides named `docker-compose.<name>.yml`, off by default. A station selects them
+with the `COMPOSE_FILE` line in its `.env`, which `task start`, the prod tasks and plain `docker compose` all follow:
+
+```bash
+COMPOSE_FILE=docker-compose.yml:docker-compose.nomadic.yml
+```
+
+To switch one on or off:
+
+- **Tilt:** `task stop`, edit `.env`, `task start`.
+- **Prod:** build its image once from the repository root (`task build SERVICE=<service> BUILD_TARGET=prod`; `task
+  build-prod` builds the base services only), edit `.env`, then `task start-prod`. Compose starts or removes the
+  service and recreates only the services the override changes.
+
+Do not set `COMPOSE_FILE` in the shell; it overrides `.env`. An override may add services and add new environment
+keys to base services, but never replace an existing key or volume, so the result does not depend on file order. All
+services use host networking, so give each one its own port.
+
+| Override                     | Services                    | Port | Docs                                                               |
+| ---------------------------- | --------------------------- | ---- | ------------------------------------------------------------------ |
+| `docker-compose.nomadic.yml` | `nomadic-episode-annotator` | 3005 | [README](../services/pipeline/nomadic-episode-annotator/README.md) |
 
 ### Cross-Service URL Dependencies
 

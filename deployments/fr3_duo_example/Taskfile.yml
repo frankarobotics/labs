@@ -1,5 +1,8 @@
 version: '3'
 
+# Tilt passes compose files explicitly, so the Tiltfile needs .env's COMPOSE_FILE in its environment
+dotenv: ['.env']
+
 vars:
   # "yes" when the NVIDIA container runtime is available. The ZED camera is
   # GPU-only (runtime: nvidia) and is skipped when this is not "yes".
@@ -81,7 +84,8 @@ tasks:
   start-prod:
     desc: Start production services with docker compose
     cmds:
-      - COMPOSE_PROFILES={{.GPU_PROFILE}} docker compose up -d
+      # Removes the containers of a deselected override
+      - COMPOSE_PROFILES={{.GPU_PROFILE}} docker compose up -d --remove-orphans
 
   stop-prod:
     desc: Stop production services

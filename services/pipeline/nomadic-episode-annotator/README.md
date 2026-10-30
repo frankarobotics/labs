@@ -41,29 +41,24 @@ Read this before enabling the service, and confirm the decision with whoever own
 For the FR3 Duo example station:
 
 1. Build the image from the repository root: `task build SERVICE=nomadic-episode-annotator`. `BUILD_TARGET` selects
-   another target than `dev`.
-2. Set `NOMADIC_API_KEY` in the shell environment, or supply an environment file with Compose's `--env-file` option.
-   Keep the key out of version control.
-3. Start the service and restart the UI so it shows the annotation panel:
+   another target than `dev`. Tilt builds it itself.
+2. In `deployments/fr3_duo_example/.env`, which is gitignored, set `NOMADIC_API_KEY` and select the override (see
+   [Optional Services](../../../deployments/README.md#optional-services)):
 
-```sh
-cd deployments/fr3_duo_example
-docker compose -f docker-compose.yml -f nomadic.compose.yml up -d nomadic-episode-annotator data-collection-ui
-```
+   ```sh
+   COMPOSE_FILE=docker-compose.yml:docker-compose.nomadic.yml
+   ```
 
-`nomadic.compose.yml` adds the annotator with read-only access to processed episodes and the configuration directory,
-and sets `NOMADIC_EPISODE_ANNOTATOR_PORT` on the UI. `data-collection` is not recreated, so this can run during a
-recording session; restarting the UI is the only interruption.
+3. Apply it from `deployments/fr3_duo_example`: under Tilt, `task stop` before editing `.env` and `task start` after;
+   otherwise `task start-prod`.
 
-To disable it again, start the UI without the override and remove the service:
+`docker-compose.nomadic.yml` adds the annotator with read-only access to processed episodes and the configuration
+directory, and sets `NOMADIC_EPISODE_ANNOTATOR_PORT` on the UI. `task start-prod` does not recreate `data-collection`,
+so this can run during a recording session; restarting the UI is the only interruption. Removing the override from
+`COMPOSE_FILE` and running `task start-prod` again reverses it and keeps the saved results in `nomadic_annotations/`.
 
-```sh
-docker compose up -d data-collection-ui
-docker compose -f docker-compose.yml -f nomadic.compose.yml rm -sf nomadic-episode-annotator
-```
-
-For another deployment, copy `nomadic.compose.yml` and adjust its mounts. The service's own `docker-compose.yml` runs it
-standalone against `DATA_ROOT`.
+For another deployment, copy `docker-compose.nomadic.yml` and adjust its mounts. The service's own `docker-compose.yml`
+runs it standalone against `DATA_ROOT`.
 
 ### Select a different configuration file
 
@@ -79,18 +74,18 @@ reference setup. The example override reads:
 For example, select an existing LABS contract stored outside the deployment directory:
 
 ```sh
-export NOMADIC_CONFIG_DIR=/absolute/path/to/station-config
-export NOMADIC_POLICY_CONTRACT_FILE=my-contract.yml
+NOMADIC_CONFIG_DIR=/absolute/path/to/station-config
+NOMADIC_POLICY_CONTRACT_FILE=my-contract.yml
 ```
 
-Then run the same Compose command. The directory must exist and the selected file must be readable. Relative
-`NOMADIC_CONFIG_DIR` paths resolve from `deployments/fr3_duo_example`.
+Set these in the same `.env`, then apply them as in step 3. The directory must exist and the selected file must be
+readable. Relative `NOMADIC_CONFIG_DIR` paths resolve from `deployments/fr3_duo_example`.
 
 For an already Nomadic-compatible recording, select an explicit spec instead:
 
 ```sh
-export NOMADIC_CONFIG_DIR=/absolute/path/to/nomadic-config
-export NOMADIC_SPEC_FILE=my-spec.json
+NOMADIC_CONFIG_DIR=/absolute/path/to/nomadic-config
+NOMADIC_SPEC_FILE=my-spec.json
 ```
 
 The selection order is an explicit spec, an embedded `nomadic_spec`, then the reference contract. Custom specs require
@@ -100,7 +95,7 @@ Nomadic-compatible messages. The contract-based ROS conversion supports the FR3 
 
 For the reference Docker setup, only the API key requires a new value. Keep the state directory across container
 replacement to retain saved results and prevent duplicate submissions. To change a setting not referenced in
-`nomadic.compose.yml`, add it to the service's `environment` in a deployment override.
+`docker-compose.nomadic.yml`, add it to the service's `environment` there.
 
 | Variable                          | Default                               | When to override                                               |
 | --------------------------------- | ------------------------------------- | -------------------------------------------------------------- |
