@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.3.0] - UNRELEASED
+## [0.3.0] - 2026-11-18
 
 - **Breaking Change:** dataset-builder writes LeRobot v3.0 datasets instead of v2.1 (see migration notes below):
   - Episodes are recorded through LeRobot 0.6.1's own dataset writer, which packs them into shared Parquet and MP4 files
