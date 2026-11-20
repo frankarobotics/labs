@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, PositiveFloat, PositiveInt, model_validator
+import numpy as np
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    PositiveInt,
+    StringConstraints,
+    model_validator,
+)
 from pydantic_yaml import parse_yaml_file_as
 
 from pipeline_configs.ros_messages import ROSMessageType
@@ -18,6 +25,13 @@ POLICY_CONTRACT_FILE = Path(os.getenv("POLICY_CONTRACT_FILE", "/workspace/config
 # suffixes data-processor rewrites when it re-encodes an image stream, longest match first
 _IMAGE_TOPIC_SUFFIXES = ("image_rect_color", "image_rect_raw", "image_raw")
 _PROCESSED_VIDEO_SUFFIX = "compressed_video"
+
+# LeRobot names a camera column by its policy_key; the checkpoint's input_features carry that same
+# name back into inference, so recording and feeding must derive it from one place
+_IMAGE_FEATURE_PREFIX = "observation.images."
+
+# a camera/state/action policy_key reaches LeRobot verbatim, so it must need no sanitizing
+SafePolicyKey = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_]+$")]
 
 
 @dataclass(frozen=True)
@@ -55,7 +69,8 @@ class PolicySettings(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    control_rate_hz: PositiveFloat
+    # whole Hz: LeRobot stores fps as an integer and derives every frame timestamp from it
+    control_rate_hz: PositiveInt
     dtype: Literal["float32", "float64"] = "float32"
 
 
@@ -64,7 +79,7 @@ class CameraSegment(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    policy_key: str
+    policy_key: SafePolicyKey
     topic: str
     shape: tuple[PositiveInt, PositiveInt, PositiveInt]
     # true stretches a differing source to shape, distorting aspect; false rejects it rather than scaling
@@ -93,13 +108,18 @@ class CameraSegment(BaseModel):
                 return self.topic[: -len(suffix)] + _PROCESSED_VIDEO_SUFFIX
         return self.topic.rstrip("/") + "/" + _PROCESSED_VIDEO_SUFFIX
 
+    @property
+    def dataset_feature_name(self) -> str:
+        """LeRobot column this camera records to, and the frame key the checkpoint's input_features expect."""
+        return _IMAGE_FEATURE_PREFIX + self.policy_key
+
 
 class PolicySegment(BaseModel):
     """One contiguous slice of the flat state or action vector, fed by a single topic."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    policy_key: str
+    policy_key: SafePolicyKey
     topic: str
     message_type: ROSMessageType
     field: str | None = None
@@ -186,6 +206,7 @@ class Annotation(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    # not a SafePolicyKey: GR00T's annotation keys are dotted paths (human.action.task_description)
     policy_key: str
     original_key: str | None = None
 
@@ -214,15 +235,30 @@ class PolicyContract(BaseModel):
     def _check_policy_keys_unique(self) -> PolicyContract:
         """policy_key names a segment in every downstream mapping, so a duplicate is ambiguous."""
         for label, keys in (
-            ("cameras", [segment.policy_key for segment in self.cameras]),
-            ("state", [segment.policy_key for segment in self.state]),
-            ("action", [segment.policy_key for segment in self.action]),
-            ("annotations", [annotation.policy_key for annotation in self.annotations]),
+            ("cameras", self.camera_keys),
+            ("state", self.state_keys),
+            ("action", self.action_keys),
+            ("annotations", tuple(annotation.policy_key for annotation in self.annotations)),
         ):
             duplicates = sorted({key for key in keys if keys.count(key) > 1})
             if duplicates:
                 raise ValueError(f"duplicate {label} policy_key: {', '.join(duplicates)}")
         return self
+
+    @property
+    def camera_keys(self) -> tuple[str, ...]:
+        """Camera policy keys in declaration order."""
+        return tuple(camera.policy_key for camera in self.cameras)
+
+    @property
+    def state_keys(self) -> tuple[str, ...]:
+        """State policy keys in flat-vector order."""
+        return tuple(segment.policy_key for segment in self.state)
+
+    @property
+    def action_keys(self) -> tuple[str, ...]:
+        """Action policy keys in flat-vector order."""
+        return tuple(segment.policy_key for segment in self.action)
 
     @property
     def state_width(self) -> int:
@@ -243,6 +279,37 @@ class PolicyContract(BaseModel):
     def action_slices(self) -> dict[str, slice]:
         """Span of each action segment in the flat vector, in declaration order."""
         return _slices(self.action)
+
+    def flatten_state(self, values_by_key: Mapping[str, Sequence[float] | np.ndarray]) -> np.ndarray:
+        """Concatenate per-segment state values into the flat vector ``state_slices`` indexes into."""
+        return self._flatten("state", self.state, values_by_key)
+
+    def flatten_action(self, values_by_key: Mapping[str, Sequence[float] | np.ndarray]) -> np.ndarray:
+        """Concatenate per-segment action values into the flat vector ``action_slices`` indexes into."""
+        return self._flatten("action", self.action, values_by_key)
+
+    def _flatten(
+        self,
+        label: str,
+        segments: Sequence[PolicySegment],
+        values_by_key: Mapping[str, Sequence[float] | np.ndarray],
+    ) -> np.ndarray:
+        """Assemble a flat vector in declaration order; a missing or mis-sized segment is fatal.
+
+        Skipping or truncating one would shift every later segment off the span the checkpoint's
+        ``modality.json`` reads it from, feeding the policy silently misaligned values.
+        """
+        parts: list[np.ndarray] = []
+        for segment in segments:
+            if segment.policy_key not in values_by_key:
+                raise KeyError(f"{label} segment {segment.policy_key!r} declared by the contract is absent")
+            vector = np.asarray(values_by_key[segment.policy_key], dtype=self.policy.dtype).reshape(-1)
+            if vector.size != segment.width:
+                raise ValueError(
+                    f"{label} segment {segment.policy_key!r} supplied {vector.size} elements, expected {segment.width}"
+                )
+            parts.append(vector)
+        return np.concatenate(parts) if parts else np.zeros(0, dtype=self.policy.dtype)
 
     @classmethod
     def from_yaml(cls, file_path: Path | str = POLICY_CONTRACT_FILE) -> PolicyContract:

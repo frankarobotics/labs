@@ -8,10 +8,11 @@ import numpy as np
 from loguru import logger
 from pipeline_configs import PADDING_WARN_FRACTION, LetterboxGeometry, compute_letterbox_geometry
 
+from lerobot_conversion.fps_grid import grid_intervals, grid_timestamps_ns
 from models.video_frame import VideoFrame
 
-DECODE_PIX_FMT = "bgr24"
-BGR_CHANNELS = 3
+DECODE_PIX_FMT = "rgb24"
+RGB_CHANNELS = 3
 # Downscaling uses area (which averages the whole source footprint)
 # Upscaling uses bilinear (which reads a fixed 2x2 neighbourhood and is enough only when growing)
 SHRINK_KERNEL = "area"
@@ -21,13 +22,13 @@ GROW_KERNEL = "bilinear"
 class VideoFrameExtractor:
     """Extract individual frames from CompressedVideo data with precise timing."""
 
-    def __init__(self, target_fps: float = 20.0) -> None:
+    def __init__(self, target_fps: int = 20) -> None:
         """Initialize video frame extractor.
 
         Args:
             target_fps: Target frame rate for output (default 20 Hz)
         """
-        self.target_fps: float = target_fps
+        self.target_fps: int = target_fps
         self.temp_files: list[Path] = []
 
         logger.debug(f"VideoFrameExtractor initialized with target FPS: {target_fps}")
@@ -64,6 +65,9 @@ class VideoFrameExtractor:
             # Write video data to temporary file
             temp_video_path = self._write_temp_video(compressed_video_data)
             frames = self._extract_frames_with_ffmpeg(temp_video_path, start_timestamp_ns, duration_ns, shape, resize)
+            if not frames:
+                # here the converter names the camera; the synchronizer's nearest-frame lookup would fail opaquely
+                raise ValueError("ffmpeg decoded no frames")
             logger.info(f"Extracted {len(frames)} frames at {self.target_fps} Hz")
             return frames
         except Exception as e:
@@ -104,17 +108,17 @@ class VideoFrameExtractor:
         """Extract frames by resampling the video to ``target_fps`` (and geometry) in a single ffmpeg pass.
 
         The ``fps`` filter resamples the whole stream in one invocation and streams raw
-        ``bgr24`` frames over a stdout pipe (no temporary image files). Streaming avoids
+        ``rgb24`` frames over a stdout pipe (no temporary image files). Streaming avoids
         the large temp-disk burst and PNG encode/decode cost of writing frames to disk,
         and lets ffmpeg determine how many frames the stream actually yields (avoiding
         tail-seek failures past the end of the stream).
         """
         try:
-            target_frame_count = int(duration_ns / 1e9 * self.target_fps)
+            target_frame_count = grid_intervals(duration_ns, self.target_fps)
             logger.debug(f"Target frame count for {self.target_fps} Hz: {target_frame_count}")
 
             if target_frame_count <= 0:
-                return []
+                raise ValueError(f"video spans {duration_ns / 1e9:.3f}s, less than one {self.target_fps} Hz frame")
 
             source_width, source_height = self._probe_dimensions(video_path)
             source_shape = (source_height, source_width)
@@ -126,7 +130,7 @@ class VideoFrameExtractor:
                     f"{shape[1]}x{shape[0]} with resize disabled"
                 )
             height, width = shape
-            frame_size = width * height * BGR_CHANNELS
+            frame_size = width * height * RGB_CHANNELS
 
             # Single pass: resample to target fps and geometry, and stream raw frames over stdout.
             # ``vframes`` caps the count inside ffmpeg so it stops and exits cleanly on
@@ -137,7 +141,7 @@ class VideoFrameExtractor:
             if shape != source_shape:
                 geometry = compute_letterbox_geometry(source_shape, shape)
                 _warn_on_padding(source_shape, geometry)
-                # convert first so swscale resamples full-res BGR, not yuv420p's half-resolution chroma planes
+                # convert first so swscale resamples full-res RGB, not yuv420p's half-resolution chroma planes
                 stream = stream.filter("format", DECODE_PIX_FMT).filter(
                     "scale",
                     geometry.width,
@@ -150,7 +154,8 @@ class VideoFrameExtractor:
                 "pipe:", format="rawvideo", pix_fmt=DECODE_PIX_FMT, vframes=target_frame_count
             ).run_async(pipe_stdout=True, pipe_stderr=True)
 
-            frame_interval_ns = duration_ns / target_frame_count
+            # the fps filter emits frames on the same 1/fps step the synchronizer samples
+            timestamps_ns = grid_timestamps_ns(start_timestamp_ns, target_frame_count, self.target_fps)
             frames: list[VideoFrame] = []
             try:
                 while True:
@@ -161,10 +166,10 @@ class VideoFrameExtractor:
                     # ``np.frombuffer`` yields a read-only view backed by the pipe
                     # bytes; copy to an owned, writable, contiguous array (matching
                     # the previous ``cv2.imread`` semantics) and free the raw buffer.
-                    frame_image = np.frombuffer(raw_frame, np.uint8).reshape((height, width, BGR_CHANNELS)).copy()
+                    frame_image = np.frombuffer(raw_frame, np.uint8).reshape((height, width, RGB_CHANNELS)).copy()
 
                     i = len(frames)
-                    frame_timestamp_ns = start_timestamp_ns + int(i * frame_interval_ns)
+                    frame_timestamp_ns = int(timestamps_ns[i])
                     frames.append(
                         VideoFrame(
                             frame_index=i,
@@ -173,7 +178,7 @@ class VideoFrameExtractor:
                             image=frame_image,
                             height=height,
                             width=width,
-                            channels=BGR_CHANNELS,
+                            channels=RGB_CHANNELS,
                         )
                     )
             finally:

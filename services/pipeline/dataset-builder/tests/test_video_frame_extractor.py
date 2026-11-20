@@ -8,8 +8,8 @@ import pytest
 from pipeline_configs import PAD_VALUE, compute_letterbox_geometry
 
 from lerobot_conversion.video_frame_extractor import (
-    BGR_CHANNELS,
     GROW_KERNEL,
+    RGB_CHANNELS,
     SHRINK_KERNEL,
     VideoFrameExtractor,
     _scale_kernel,
@@ -21,7 +21,7 @@ SOURCE_SHAPE = (SOURCE_HEIGHT, SOURCE_WIDTH)
 SOURCE_FPS = 30
 DURATION_S = 1
 DURATION_NS = int(DURATION_S * 1e9)
-TARGET_FPS = 10.0
+TARGET_FPS = 10
 
 pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg binary not available")
 
@@ -61,8 +61,8 @@ def test_a_source_already_at_the_declared_shape_is_passed_through(
 
     assert frames
     for frame in frames:
-        assert frame.image.shape == (SOURCE_HEIGHT, SOURCE_WIDTH, BGR_CHANNELS)
-        assert (frame.height, frame.width, frame.channels) == (SOURCE_HEIGHT, SOURCE_WIDTH, BGR_CHANNELS)
+        assert frame.image.shape == (SOURCE_HEIGHT, SOURCE_WIDTH, RGB_CHANNELS)
+        assert (frame.height, frame.width, frame.channels) == (SOURCE_HEIGHT, SOURCE_WIDTH, RGB_CHANNELS)
 
 
 def test_a_source_differing_from_the_declared_shape_is_rejected_without_resize(
@@ -78,7 +78,7 @@ def test_frames_are_scaled_down_to_the_declared_shape(extractor: VideoFrameExtra
 
     assert frames
     for frame in frames:
-        assert frame.image.shape == (224, 224, BGR_CHANNELS)
+        assert frame.image.shape == (224, 224, RGB_CHANNELS)
         assert (frame.height, frame.width) == (224, 224)
 
 
@@ -86,7 +86,7 @@ def test_frames_are_scaled_up_to_the_declared_shape(extractor: VideoFrameExtract
     frames = extractor.extract_frames(video_bytes, 0, DURATION_NS, (720, 1280), resize=True)
 
     assert frames
-    assert frames[0].image.shape == (720, 1280, BGR_CHANNELS)
+    assert frames[0].image.shape == (720, 1280, RGB_CHANNELS)
 
 
 def test_resampling_is_unaffected_by_scaling(extractor: VideoFrameExtractor, video_bytes: bytes) -> None:
@@ -103,7 +103,7 @@ def test_scaled_frames_carry_the_same_picture(extractor: VideoFrameExtractor, vi
     unscaled = extractor.extract_frames(video_bytes, 0, DURATION_NS, SOURCE_SHAPE, resize=False)
     scaled = extractor.extract_frames(video_bytes, 0, DURATION_NS, (240, 320), resize=True)
 
-    for channel in range(BGR_CHANNELS):
+    for channel in range(RGB_CHANNELS):
         assert scaled[0].image[..., channel].mean() == pytest.approx(unscaled[0].image[..., channel].mean(), abs=2.0)
 
 
@@ -160,3 +160,15 @@ def test_aspect_preserving_scale_is_not_warned_about(
     extractor.extract_frames(video_bytes, 0, DURATION_NS, (240, 320), resize=True)
 
     assert not [message for message in warnings_log if "pads" in message]
+
+
+def test_frames_are_stamped_one_target_interval_apart(extractor: VideoFrameExtractor, video_bytes: bytes) -> None:
+    """The fps filter emits frames 1/fps apart even when the duration is not a whole number of them."""
+    frames = extractor.extract_frames(video_bytes, 1_000, int(0.95e9), SOURCE_SHAPE, resize=False)
+
+    assert [frame.timestamp_ns for frame in frames] == [1_000 + round(i * 1e9 / TARGET_FPS) for i in range(9)]
+
+
+def test_a_video_shorter_than_one_frame_is_rejected(extractor: VideoFrameExtractor, video_bytes: bytes) -> None:
+    with pytest.raises(ValueError, match="less than one"):
+        extractor.extract_frames(video_bytes, 0, int(0.5e9 / TARGET_FPS), SOURCE_SHAPE, resize=False)

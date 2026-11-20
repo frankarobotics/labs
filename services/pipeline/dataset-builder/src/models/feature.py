@@ -18,18 +18,3 @@ class Feature(BaseModel):
 
     def to_dict(self) -> dict[str, Any]:  # noqa: D102
         return self.model_dump()
-
-
-class VideoFeature(Feature):
-    """Represents a video feature with specific metadata.
-
-    Attributes:
-        dtype: The type of feature, set to "video".
-        video_info: Metadata and information about the video.
-    """
-
-    dtype: str = "video"
-    video_info: dict[str, Any]
-
-    def to_dict(self) -> dict[str, Any]:  # noqa: D102
-        return self.model_dump()

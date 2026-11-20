@@ -4,6 +4,8 @@
 import argparse
 import shutil
 import sys
+import tempfile
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -12,8 +14,8 @@ from uuid import UUID
 from loguru import logger
 from pipeline_configs import POLICY_CONTRACT_FILE
 
+from models.dataset_build_request import DatasetBuildRequest
 from services.dataset_builder import (
-    DatasetBuildRequest,
     UnsupportedDatasetFormatError,
     build_dataset,
     list_supported_formats,
@@ -43,6 +45,18 @@ def _date_type(value: str) -> date:
         return date.fromisoformat(value)
     except ValueError as exc:
         raise argparse.ArgumentTypeError(f"Invalid date '{value}' (expected YYYY-MM-DD)") from exc
+
+
+def _positive_int_type(value: str) -> int:
+    """Parse a strictly positive integer."""
+    error = argparse.ArgumentTypeError(f"Invalid value '{value}' (expected a positive whole number)")
+    try:
+        number = int(value)
+    except ValueError as exc:
+        raise error from exc
+    if number <= 0:
+        raise error
+    return number
 
 
 def parse_args() -> argparse.Namespace:
@@ -84,7 +98,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--fps",
-        type=float,
+        type=_positive_int_type,
         help="Override the output FPS (recommended default: contract's policy.control_rate_hz)",
     )
     parser.add_argument(
@@ -265,17 +279,7 @@ def run_build(args: argparse.Namespace) -> None:
             f"Output directory is not empty: {request.output_dir}. "
             "Remove it or choose a different --output/--dataset-name to avoid mixing with stale files."
         )
-    request.output_dir.mkdir(parents=True, exist_ok=True)
-
-    try:
-        result: dict[str, Any] = build_dataset(request)
-    except Exception:
-        try:
-            shutil.rmtree(request.output_dir)
-            logger.info(f"Removed partial dataset at {request.output_dir} due to failure during dataset creation")
-        except OSError as cleanup_error:
-            logger.error(f"Failed to remove partial dataset at {request.output_dir}: {cleanup_error}")
-        raise
+    result = _build_staged(request)
 
     episode_metadata = result["episode_metadata"]
     metadata_files = result["metadata_files"]
@@ -286,6 +290,38 @@ def run_build(args: argparse.Namespace) -> None:
     logger.info("Generated metadata files:")
     for file_type, file_path in metadata_files.items():
         logger.info(f"  {file_type}: {file_path}")
+
+
+def _build_staged(request: DatasetBuildRequest) -> dict[str, Any]:
+    """Build into a private sibling directory and rename it into place, so failure only removes what this run made."""
+    output_dir = request.output_dir
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    # a sibling keeps the final rename on one filesystem, so the dataset appears complete or not at all
+    staging_root = Path(tempfile.mkdtemp(prefix=f".{output_dir.name}.", suffix=".partial", dir=output_dir.parent))
+    staged_dir = staging_root / output_dir.name
+
+    try:
+        result: dict[str, Any] = build_dataset(replace(request, output_dir=staged_dir))
+    except BaseException:
+        try:
+            shutil.rmtree(staging_root)
+            logger.info(f"Removed partial dataset at {staging_root} due to failure during dataset creation")
+        except OSError as cleanup_error:
+            logger.error(f"Failed to remove partial dataset at {staging_root}: {cleanup_error}")
+        raise
+
+    # rename replaces an empty output_dir but refuses a non-empty one, so another process's data survives
+    try:
+        staged_dir.rename(output_dir)
+    except OSError as error:
+        raise RuntimeError(f"Dataset was built at {staged_dir} but could not be moved to {output_dir}") from error
+    staging_root.rmdir()
+
+    result["dataset_dir"] = output_dir
+    result["metadata_files"] = {
+        file_type: output_dir / path.relative_to(staged_dir) for file_type, path in result["metadata_files"].items()
+    }
+    return result
 
 
 def main() -> None:

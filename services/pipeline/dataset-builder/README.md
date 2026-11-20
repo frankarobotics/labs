@@ -65,9 +65,9 @@ episode processing daemon.
 
 Supported target formats:
 
-| Format    | Description                                                                                                              |
-| --------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `lerobot` | LeRobot v2.1 dataset structure with Parquet observations and MP4 videos; includes GR00T-specific files and observations. |
+| Format    | Description                                                                                                    |
+| --------- | -------------------------------------------------------------------------------------------------------------- |
+| `lerobot` | LeRobot v3.0 dataset with Parquet observations, MP4 videos and real statistics; includes GR00T-specific files. |
 
 The service is structured so additional formats can be plugged in behind the same CLI and service interface — see
 `src/services/dataset_builder.py`.
@@ -133,7 +133,7 @@ usage: main.py [-h] [--verbose] [--format {lerobot}]
 | `--dataset-name`    | _(required)_                                         | Dataset name                                                     |
 | `--output`          | `/workspace/data/datasets/lerobot/<dataset-name>`    | Output directory (derived from `--dataset-name` when omitted)    |
 | `--format`          | `lerobot`                                            | Target dataset format                                            |
-| `--fps`             | contract's `policy.control_rate_hz`                  | Override the resampling target                                   |
+| `--fps`             | contract's `policy.control_rate_hz`                  | Override the resampling target (a positive whole number)         |
 | `--deployment-dir`  | `/workspace/deployments/fr3_duo_example`             | Resolves policy contract path automatically                      |
 | `--policy-type`     | `gr00t`                                              | Policy model the contract targets                                |
 | `--policy-contract` | `<deployment-dir>/config_contract_<policy-type>.yml` | Override the policy contract path (required input)               |
@@ -160,7 +160,7 @@ usage: main.py [-h] [--verbose] [--format {lerobot}]
 
 - The service expects MCAP input that already contains `foxglove.CompressedVideo` messages (i.e. output from
   `data-processor`, not raw `data-recorder` output).
-- `lerobot` is installed inside the container image so its dependencies are not required on the host for local
-  development.
+- `lerobot` is pinned exactly because its writer produces the v3.0 layout and statistics; torch comes from the CPU wheel
+  index because the builder never uses a GPU.
 - Set `DATA_ROOT` (default `../../../data`) and `DEPLOYMENTS_ROOT` (default `../../../deployments`) environment
   variables to point the Docker volume mounts at a non-default location.

@@ -5,15 +5,10 @@ from pipeline_configs import PolicyContract
 
 from lerobot_conversion.lerobot_features import build_features, build_modality_config
 
-VIDEO_INFOS: dict[str, dict[str, Any]] = {
-    "head": {"video.height": 480, "video.width": 640, "video.channels": 3, "video.codec": "av1"},
-    "wrist": {"video.height": 480, "video.width": 640, "video.channels": 3, "video.codec": "av1"},
-}
-
 
 @pytest.fixture
 def features(contract: PolicyContract) -> dict[str, Any]:
-    return build_features(contract, VIDEO_INFOS)
+    return build_features(contract)
 
 
 def test_every_state_segment_gets_a_feature_of_its_own_width(
@@ -47,9 +42,13 @@ def test_policy_columns_use_the_contract_dtype(features: dict[str, Any]) -> None
     assert features["observation.state.arm_wrench"].dtype == "float32"
 
 
-def test_cameras_become_video_features(features: dict[str, Any]) -> None:
+def test_cameras_become_video_features_at_the_contract_shape(features: dict[str, Any]) -> None:
     assert features["observation.images.head"].dtype == "video"
     assert features["observation.images.wrist"].shape == (480, 640, 3)
+
+
+def test_index_columns_are_left_to_lerobot(features: dict[str, Any]) -> None:
+    assert not {"timestamp", "frame_index", "episode_index", "index", "task_index"} & features.keys()
 
 
 def test_annotations_come_from_the_contract(features: dict[str, Any]) -> None:

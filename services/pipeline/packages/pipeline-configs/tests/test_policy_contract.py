@@ -3,11 +3,18 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 import yaml
 from pydantic import ValidationError
 
-from pipeline_configs.policy_contract import CameraSegment, PolicyContract, PolicySegment, load_policy_contract
+from pipeline_configs.policy_contract import (
+    Annotation,
+    CameraSegment,
+    PolicyContract,
+    PolicySegment,
+    load_policy_contract,
+)
 
 DEPLOYMENT_CONTRACT = Path(__file__).parents[5] / "deployments/fr3_duo_example/config_contract_gr00t.yml"
 
@@ -49,6 +56,15 @@ def test_deployment_contract_loads() -> None:
     assert len(contract.cameras) == 3
 
 
+@pytest.mark.parametrize("rate", [0, 29.97])
+def test_control_rate_must_be_a_positive_whole_number(rate: float) -> None:
+    contract = _minimal_contract()
+    contract["policy"]["control_rate_hz"] = rate
+
+    with pytest.raises(ValidationError, match="control_rate_hz"):
+        PolicyContract.model_validate(contract)
+
+
 def test_load_policy_contract_accepts_an_explicit_path() -> None:
     assert load_policy_contract(DEPLOYMENT_CONTRACT).version == 1
 
@@ -66,6 +82,45 @@ def test_deployment_slices_are_contiguous_and_ordered(group: str) -> None:
         assert span.stop - span.start == segment.width
         expected_start = span.stop
     assert expected_start == getattr(contract, f"{group}_width")
+
+
+def test_key_properties_follow_declaration_order() -> None:
+    contract = PolicyContract.from_yaml(DEPLOYMENT_CONTRACT)
+
+    assert contract.camera_keys == ("head", "wrist_left", "wrist_right")
+    assert contract.state_keys == tuple(segment.policy_key for segment in contract.state)
+    assert contract.action_keys == tuple(segment.policy_key for segment in contract.action)
+
+
+def test_flatten_state_concatenates_along_the_declared_slices() -> None:
+    contract = PolicyContract.from_yaml(DEPLOYMENT_CONTRACT)
+    values = {segment.policy_key: [float(i)] * segment.width for i, segment in enumerate(contract.state)}
+
+    flat = contract.flatten_state(values)
+
+    assert flat.shape == (contract.state_width,)
+    assert flat.dtype == np.float32
+    for key, span in contract.state_slices.items():
+        assert list(flat[span]) == values[key]
+
+
+@pytest.mark.parametrize("method", ["flatten_state", "flatten_action"])
+def test_flatten_rejects_a_missing_segment(method: str) -> None:
+    contract = PolicyContract.from_yaml(DEPLOYMENT_CONTRACT)
+
+    with pytest.raises(KeyError, match="declared by the contract is absent"):
+        getattr(contract, method)({})
+
+
+def test_flatten_rejects_a_mis_sized_segment() -> None:
+    """A short segment would shift every later one off the span modality.json reads it from."""
+    contract = PolicyContract.from_yaml(DEPLOYMENT_CONTRACT)
+    values = {segment.policy_key: [0.0] * segment.width for segment in contract.state}
+    first = contract.state[0]
+    values[first.policy_key] = [0.0] * (first.width - 1)
+
+    with pytest.raises(ValueError, match=f"expected {first.width}"):
+        contract.flatten_state(values)
 
 
 @pytest.mark.parametrize(
@@ -189,6 +244,27 @@ def test_duplicate_policy_key_is_rejected() -> None:
 )
 def test_dataset_topic_derivation(topic: str, expected: str) -> None:
     assert _camera(topic=topic).dataset_topic == expected
+
+
+def test_camera_dataset_feature_name_is_the_policy_key_verbatim() -> None:
+    """The sidecar feeds this key and dataset-builder records it, so it must not be transformed."""
+    assert _camera(policy_key="wrist_left").dataset_feature_name == "observation.images.wrist_left"
+
+
+@pytest.mark.parametrize("policy_key", ["/head", "head/left", "head.left", "head-left", ""])
+def test_camera_policy_key_needing_sanitizing_is_rejected(policy_key: str) -> None:
+    with pytest.raises(ValidationError):
+        _camera(policy_key=policy_key)
+
+
+@pytest.mark.parametrize("policy_key", ["/arm", "arm/position", "arm.position", "arm-position", ""])
+def test_segment_policy_key_needing_sanitizing_is_rejected(policy_key: str) -> None:
+    with pytest.raises(ValidationError):
+        _segment(policy_key=policy_key, message_type="std_msgs/Float32")
+
+
+def test_annotation_policy_key_keeps_groots_dotted_keys() -> None:
+    assert Annotation(policy_key="human.action.task_description").policy_key == "human.action.task_description"
 
 
 def test_camera_shape_is_height_width_channels() -> None:

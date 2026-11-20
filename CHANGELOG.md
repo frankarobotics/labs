@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.3.0] - UNRELEASED
+## [0.4.0] - UNRELEASED
 
 - Episode metadata models, device enums and the on-disk episode layout moved from data-collection into a shared
   `pipeline-episodes` package, so other pipeline services can read episodes without depending on data-collection.
@@ -11,8 +11,39 @@
 
 ### Migration notes
 
-1. To use optional services, such as the `nomadic-episode-annotator`, align `Taskfile.yml`, `Tiltfile` and `docker-compose.<service>.yml` in your deployments
-   with `deployments/fr3_duo_example`; otherwise Tilt ignores `COMPOSE_FILE`.
+1. To use optional services, such as the `nomadic-episode-annotator`, align `Taskfile.yml`, `Tiltfile` and
+   `docker-compose.<service>.yml` in your deployments with `deployments/fr3_duo_example`; otherwise Tilt ignores
+   `COMPOSE_FILE`.
+
+## [0.3.0] - 2026-11-18
+
+- **Breaking Change:** dataset-builder writes LeRobot v3.0 datasets instead of v2.1 (see migration notes below):
+  - Episodes are recorded through LeRobot 0.6.1's own dataset writer, which packs them into shared Parquet and MP4 files
+    and moves episode metadata to `meta/episodes/*.parquet` and `meta/tasks.parquet`.
+  - `meta/stats.json` carries real per-feature statistics, quantiles included, instead of zero-filled placeholders.
+  - Frame timestamps are `frame_index / fps` from episode start, and the synchronizer samples exactly every `1 / fps`
+    instead of spreading samples up to the last message.
+  - `lerobot` is now a locked dependency of the service (CPU-only torch) rather than installed at image build time.
+- **Breaking Change:** Camera, state and action `policy_key`s in a policy contract may only contain letters, digits and
+  underscores, since they reach LeRobot feature names verbatim (see migration notes below).
+- **Breaking Change:** A policy contract's `policy.control_rate_hz`, and dataset-builder's `--fps` override, must be a
+  positive whole number. dataset-builder used to sample at a fractional rate while truncating it to an integer in
+  `meta/info.json` (see migration notes below).
+- dataset-builder rejects an episode whose state or action segment has a different width than the contract declares,
+  instead of shifting every later segment in the flat vectors.
+- Fixed dataset-builder deleting files it did not write when a build failed. It now builds into a hidden
+  `.<name>.*.partial` directory beside `--output` and moves the dataset into place only once complete.
+- Fixed the `franka-robot` image build by updating `franka_ros2` from v3.5.3 to v3.6.1, and applied the same update to
+  `controller-coordinator`.
+
+### Migration notes
+
+1. Existing v2.1 datasets can be converted to v3.0 on a copy with LeRobot's `convert_dataset_v21_to_v30`, or rebuilt
+   from their processed episodes.
+2. Rename any `policy_key` in `cameras`, `state` or `action` of your `config_contract_*.yml` that contains `/`, `.` or
+   `-`. Annotation keys such as `human.validity` are unaffected.
+3. Round a fractional `policy.control_rate_hz` in your `config_contract_*.yml` to a whole number, and rebuild any
+   dataset built at that rate, since its `meta/info.json` records a truncated `fps`.
 
 ## [0.2.1] - 2026-09-10
 

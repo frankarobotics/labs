@@ -1,7 +1,6 @@
-import sys
+import copy
 from collections.abc import Iterator
 from pathlib import Path
-from types import ModuleType
 from typing import Any
 
 import pytest
@@ -9,33 +8,6 @@ from loguru import logger
 from pipeline_configs import PolicyContract
 
 from lerobot_conversion.policy_manifest import PolicyManifest
-
-# lerobot is installed in the service image only, so the members the conversion modules import are
-# stubbed here (before any test module imports them) to keep the pure mappings testable on a host
-DEFAULT_FEATURES: dict[str, Any] = {
-    "timestamp": {"dtype": "float32", "shape": (1,), "names": None},
-    "frame_index": {"dtype": "int64", "shape": (1,), "names": None},
-    "episode_index": {"dtype": "int64", "shape": (1,), "names": None},
-    "index": {"dtype": "int64", "shape": (1,), "names": None},
-    "task_index": {"dtype": "int64", "shape": (1,), "names": None},
-}
-
-if "lerobot.datasets.utils" not in sys.modules:
-    for name in ("lerobot", "lerobot.datasets"):
-        sys.modules.setdefault(name, ModuleType(name))
-    utils = ModuleType("lerobot.datasets.utils")
-    utils.DEFAULT_FEATURES = DEFAULT_FEATURES  # type: ignore[attr-defined]
-    utils.DEFAULT_CHUNK_SIZE = 1000  # type: ignore[attr-defined]
-    utils.write_episode_stats = lambda *args, **kwargs: None  # type: ignore[attr-defined]
-    sys.modules["lerobot.datasets.utils"] = utils
-
-    video_utils = ModuleType("lerobot.datasets.video_utils")
-    video_utils.get_video_info = lambda *args, **kwargs: {}  # type: ignore[attr-defined]
-    sys.modules["lerobot.datasets.video_utils"] = video_utils
-
-    compute_stats = ModuleType("lerobot.datasets.compute_stats")
-    compute_stats.compute_episode_stats = lambda *args, **kwargs: {}  # type: ignore[attr-defined]
-    sys.modules["lerobot.datasets.compute_stats"] = compute_stats
 
 DEPLOYMENT_CONTRACT = Path(__file__).parents[4] / "deployments/fr3_duo_example/config_contract_gr00t.yml"
 
@@ -92,6 +64,11 @@ def warnings_log() -> Iterator[list[str]]:
     sink_id = logger.add(lambda message: messages.append(message.record["message"]), level="WARNING")
     yield messages
     logger.remove(sink_id)
+
+
+@pytest.fixture(scope="session")
+def contract_data() -> dict[str, Any]:
+    return copy.deepcopy(CONTRACT_DATA)
 
 
 @pytest.fixture
