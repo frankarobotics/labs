@@ -6,6 +6,9 @@ services:
     network_mode: host
     restart: unless-stopped
     environment:
+      # Loopback only: the API has no authentication and uploads with the station's Nomadic key
+      NOMADIC_EPISODE_ANNOTATOR_HOST: 127.0.0.1
+      NOMADIC_EPISODE_ANNOTATOR_PORT: ${NOMADIC_EPISODE_ANNOTATOR_PORT:-3050}
       NOMADIC_ENABLED: ${NOMADIC_ENABLED:-true}
       NOMADIC_API_KEY: ${NOMADIC_API_KEY:-}
       NOMADIC_POLICY_CONTRACT_PATH: /workspace/nomadic-config/${NOMADIC_POLICY_CONTRACT_FILE:-config_contract_gr00t.yml}
@@ -23,4 +26,4 @@ services:
 
   data-collection-ui:
     environment:
-      NOMADIC_EPISODE_ANNOTATOR_PORT: 3050
+      NOMADIC_EPISODE_ANNOTATOR_PORT: ${NOMADIC_EPISODE_ANNOTATOR_PORT:-3050}

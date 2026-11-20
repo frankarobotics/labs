@@ -7,6 +7,12 @@
 - Added the optional `nomadic-episode-annotator` service, which sends a saved episode to Nomadic for timestamped action
   annotation and shows results in an annotation panel on the `data-collection-ui` episode page. Enabling it uploads
   episode data to Nomadic; see the service README before turning it on.
+- Optional services are compose overrides selected via `COMPOSE_FILE` in `.env` (see migration notes).
+
+### Migration notes
+
+1. To use optional services, such as the `nomadic-episode-annotator`, align `Taskfile.yml`, `Tiltfile` and `docker-compose.<service>.yml` in your deployments
+   with `deployments/fr3_duo_example`; otherwise Tilt ignores `COMPOSE_FILE`.
 
 ## [0.2.1] - 2026-09-10
 

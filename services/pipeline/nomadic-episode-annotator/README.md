@@ -71,9 +71,10 @@ For the FR3 Duo example station:
    otherwise `task start-prod`.
 
 `docker-compose.nomadic.yml` adds the annotator with read-only access to processed episodes and the configuration
-directory, and sets `NOMADIC_EPISODE_ANNOTATOR_PORT` on the UI. `task start-prod` does not recreate `data-collection`,
-so this can run during a recording session; restarting the UI is the only interruption. Removing the override from
-`COMPOSE_FILE` and running `task start-prod` again reverses it and keeps the saved results in `nomadic_annotations/`.
+directory, and sets `NOMADIC_EPISODE_ANNOTATOR_PORT` (default `3050`) on both the annotator and the UI.
+`task start-prod` does not recreate `data-collection`, so this can run during a recording session; restarting the UI is
+the only interruption. Removing the override from `COMPOSE_FILE` and running `task start-prod` again reverses it and
+keeps the saved results in `nomadic_annotations/`.
 
 ### Connect from the episode page
 

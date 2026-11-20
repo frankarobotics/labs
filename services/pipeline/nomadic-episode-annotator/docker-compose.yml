@@ -16,6 +16,9 @@ services:
     network_mode: host
     restart: unless-stopped
     environment:
+      # Loopback only: the API has no authentication and uploads with the station's Nomadic key
+      NOMADIC_EPISODE_ANNOTATOR_HOST: 127.0.0.1
+      NOMADIC_EPISODE_ANNOTATOR_PORT: ${NOMADIC_EPISODE_ANNOTATOR_PORT:-3050}
       NOMADIC_ENABLED: ${NOMADIC_ENABLED:-true}
       NOMADIC_API_KEY: ${NOMADIC_API_KEY:-}
     volumes:

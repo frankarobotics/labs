@@ -208,7 +208,13 @@ To switch one on or off:
 
 Do not set `COMPOSE_FILE` in the shell; it overrides `.env`. An override may add services and add new environment
 keys to base services, but never replace an existing key or volume, so the result does not depend on file order. All
-services use host networking, so give each one its own port.
+services use host networking, so give each one its own port from its band:
+
+| Ports     | Use                     |
+| --------- | ----------------------- |
+| 3001–3049 | Always-on internal API  |
+| 3050–3099 | Opt-in internal service |
+| 4000+     | Human-facing            |
 
 | Override                     | Services                    | Port | Docs                                                               |
 | ---------------------------- | --------------------------- | ---- | ------------------------------------------------------------------ |
