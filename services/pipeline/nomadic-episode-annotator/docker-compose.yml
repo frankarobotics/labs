@@ -20,7 +20,6 @@ services:
       NOMADIC_EPISODE_ANNOTATOR_HOST: 127.0.0.1
       NOMADIC_EPISODE_ANNOTATOR_PORT: ${NOMADIC_EPISODE_ANNOTATOR_PORT:-3050}
       NOMADIC_ENABLED: ${NOMADIC_ENABLED:-true}
-      NOMADIC_API_KEY: ${NOMADIC_API_KEY:-}
     volumes:
       - ${DATA_ROOT:-../../../data}/processed_episodes:/workspace/data/processed_episodes:ro
       - ${DATA_ROOT:-../../../data}/nomadic_annotations:/workspace/data/nomadic_annotations

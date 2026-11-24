@@ -21,10 +21,6 @@ function Step({ number, title, children }: { number: number; title: string; chil
   )
 }
 
-function Code({ children }: { children: React.ReactNode }) {
-  return <code className='bg-pastel-grey-200 rounded-sm px-1.5 py-0.5 font-mono text-xs'>{children}</code>
-}
-
 function ConnectForm({ endpoint }: { endpoint: string }) {
   const fetcher = useFetcher<{ account?: StationAccount; error?: string }>()
   const [apiKey, setApiKey] = useState('')
@@ -115,9 +111,8 @@ export default function Setup({ setup, endpoint }: { setup: StationSetup; endpoi
         </Step>
       </ol>
       <p className='text text-adriatic-500 max-w-[80ch] text-xs'>
-        The key is checked with Nomadic, saved on this station and never shown again. Once connected, only an
-        administrator can change it: set <Code>NOMADIC_API_KEY</Code> in the deployment&apos;s <Code>.env</Code>{' '}
-        instead.
+        The key is checked with Nomadic, saved in a key file on this station and never shown again. Once connected, only
+        an administrator can change it, by removing the key file.
       </p>
     </div>
   )

@@ -9,8 +9,6 @@ from pathlib import Path
 from typing import IO
 from uuid import UUID, uuid4
 
-from pydantic import SecretStr
-
 from configs.annotator import AnnotationConfig
 from jobs import station_key
 from jobs.episodes import recording_path
@@ -45,7 +43,7 @@ def _billing_message(exc: BillingDeclinedError, *, uploaded: bool) -> str:
 
 
 _ALREADY_CONNECTED = (
-    "This station is already connected to Nomadic. An administrator can change the key in the station configuration."
+    "This station is already connected to Nomadic. An administrator can remove the station's key file to disconnect it."
 )
 
 
@@ -72,6 +70,8 @@ class AnnotationService:
         self.config = config
         self.gateway_factory = gateway_factory
         self.key_verifier = key_verifier
+        # The key an operator connected from the episode page; the only source of the station's key.
+        self._api_key = ""
         self.account: StationAccount | None = None
         self.store: JobStore | None = None
         self._lock_file: IO[str] | None = None
@@ -82,13 +82,14 @@ class AnnotationService:
         # Uploaded recordings are processed by Nomadic; following them must not hold up the next upload.
         self._follow_slots = threading.BoundedSemaphore(config.max_pending_jobs)
         self._followers: set[threading.Thread] = set()
+        self._load_station_key()
 
     def unavailable_reason(self) -> str | None:
         """Explain unavailable configuration without returning secrets or filesystem paths."""
         if not self.config.enabled:
             return "Nomadic annotations are not enabled for this station."
-        if not self.config.api_key.get_secret_value():
-            return "The station's Nomadic API key is not configured."
+        if not self._api_key:
+            return "This station is not connected to Nomadic."
         try:
             workbench_url(self.config.dashboard_url, "batch", "video")
         except ValueError as exc:
@@ -97,7 +98,7 @@ class AnnotationService:
 
     def _setup(self) -> StationSetup | None:
         """Offer account links only when an enabled station is missing just its API key."""
-        if not self.config.enabled or self.config.api_key.get_secret_value():
+        if not self.config.enabled or self._api_key:
             return None
         try:
             return StationSetup(
@@ -109,7 +110,6 @@ class AnnotationService:
 
     def start(self) -> None:
         """Acquire single-worker ownership and recover interrupted local jobs."""
-        self._load_station_key()
         with self._guard:
             if self.store or self.unavailable_reason():
                 return
@@ -140,13 +140,13 @@ class AnnotationService:
     def connect(self, api_key: str) -> StationAccount:
         """Verify an operator's key with Nomadic, then save it and start the worker; only for unconnected stations.
 
-        A station that already has a key, from its configuration or an earlier connection, keeps it. Replacing a key
-        from the page would let anyone who can open the UI redirect the station's uploads to another account.
+        A station that already has a key keeps it. Replacing a key from the page would let anyone who can open the UI
+        redirect the station's uploads to another account.
         """
         api_key = api_key.strip()
         if not self.config.enabled:
             raise AnnotationConflictError("Nomadic annotations are not enabled for this station.")
-        if self.config.api_key.get_secret_value():
+        if self._api_key:
             raise AnnotationConflictError(_ALREADY_CONNECTED)
         if not api_key:
             raise ValueError("Paste a Nomadic API key.")
@@ -175,7 +175,7 @@ class AnnotationService:
     def _save_and_start(self, api_key: str, email: str | None) -> StationAccount:
         """Save a verified key and start the worker, leaving the station unconnected if the worker cannot start."""
         with self._guard:
-            if self.config.api_key.get_secret_value():
+            if self._api_key:
                 raise AnnotationConflictError(_ALREADY_CONNECTED)
             try:
                 station_key.save(self.config.state_path, api_key, email)
@@ -183,14 +183,14 @@ class AnnotationService:
                 raise AnnotationUnavailableError(
                     "The key could not be saved. Check the station's data directory."
                 ) from exc
-            self.config.api_key = SecretStr(api_key)
+            self._api_key = api_key
             self.account = StationAccount(email=email)
         try:
             self.start()
         except Exception:
             # Leave the station unconnected, so the operator can connect again once the cause is fixed.
             with self._guard:
-                self.config.api_key = SecretStr("")
+                self._api_key = ""
                 self.account = None
                 with suppress(OSError):
                     station_key.remove(self.config.state_path)
@@ -198,8 +198,8 @@ class AnnotationService:
         return self.account
 
     def _load_station_key(self) -> None:
-        """Use a key connected from the episode page when the configuration does not set one."""
-        if not self.config.enabled or self.config.api_key.get_secret_value():
+        """Use the key an operator connected from the episode page, if there is one."""
+        if not self.config.enabled:
             return
         try:
             saved = station_key.load(self.config.state_path)
@@ -207,8 +207,7 @@ class AnnotationService:
             logger.warning("The saved Nomadic API key could not be read; the station needs to be connected again")
             return
         if saved:
-            api_key, email = saved
-            self.config.api_key = SecretStr(api_key)
+            self._api_key, email = saved
             self.account = StationAccount(email=email)
 
     def _billing_url(self) -> str | None:
@@ -353,7 +352,7 @@ class AnnotationService:
         try:
             if job.remote_started and (job.analysis_id or job.batch_id):
                 stage = "fetching"
-                gateway = self.gateway_factory(self.config)
+                gateway = self.gateway_factory(self.config, self._api_key)
                 self._fetch(job, gateway)
                 return
             if job.remote_started:
@@ -363,7 +362,7 @@ class AnnotationService:
                 stage = job.state
                 self._reserve_follower()
                 reserved = True
-                gateway = self.gateway_factory(self.config)
+                gateway = self.gateway_factory(self.config, self._api_key)
                 job.message = (
                     "Nomadic is processing the recording." if stage == "ingesting" else "Analyzing robotic actions."
                 )
@@ -380,7 +379,7 @@ class AnnotationService:
             self._reserve_follower()
             reserved = True
             stage = "connecting"
-            gateway = self.gateway_factory(self.config)
+            gateway = self.gateway_factory(self.config, self._api_key)
             stage = "uploading"
             job.state, job.message, job.remote_started = "uploading", "Uploading recording to Nomadic.", True
             self._save(job)
@@ -495,8 +494,7 @@ class AnnotationService:
             return f"{exc} Start the annotation again."
         if stage == "preparing" and isinstance(exc, FileNotFoundError | ValueError):
             message = str(exc)
-            secret = self.config.api_key.get_secret_value()
-            return message.replace(secret, "[redacted]") if secret else message
+            return message.replace(self._api_key, "[redacted]") if self._api_key else message
         messages = {
             "preparing": (
                 "The recording could not be prepared. Check the processed MCAP and station mapping, then retry."

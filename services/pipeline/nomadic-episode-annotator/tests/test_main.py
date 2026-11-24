@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from adapters.nomadic_gateway import NomadicGateway
 from configs.annotator import get_annotation_config
 from dependencies import get_annotation_service
+from jobs import station_key
 from jobs.service import AnnotationService, AnnotationUnavailableError
 from main import app
 
@@ -15,9 +16,9 @@ from main import app
 @pytest.fixture
 def station(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     monkeypatch.setenv("NOMADIC_ENABLED", "true")
-    monkeypatch.setenv("NOMADIC_API_KEY", "test-key-never-send")
     monkeypatch.setenv("NOMADIC_PROCESSED_EPISODES_PATH", str(tmp_path / "processed"))
     monkeypatch.setenv("NOMADIC_STATE_PATH", str(tmp_path / "state"))
+    station_key.save(tmp_path / "state", "test-key-never-send", "operator@lab.example")
     get_annotation_config.cache_clear()
     get_annotation_service.cache_clear()
     yield tmp_path / "state"
@@ -39,7 +40,7 @@ def test_lifespan_starts_the_worker_and_releases_it_on_shutdown(station: Path) -
 
 
 def test_startup_fails_when_storage_is_unavailable(station: Path) -> None:
-    station.write_text("not a directory")
+    (station / "worker.lock").mkdir()
     with pytest.raises(AnnotationUnavailableError), TestClient(app):
         pass
 
@@ -51,4 +52,4 @@ def test_disabled_station_serves_status_without_storage(station: Path, monkeypat
         response = client.get(f"/api/v1/episodes/{uuid7.create()}/annotations")
     assert response.status_code == 200
     assert response.json()["enabled"] is False
-    assert not station.exists()
+    assert [path.name for path in station.iterdir()] == [station_key.FILE_NAME]
