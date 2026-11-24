@@ -78,16 +78,11 @@ keeps the saved results in `nomadic_annotations/`.
 
 ### Connect from the episode page
 
-The episode page is the only way to give a station its Nomadic API key; the annotator does not read a key from the
-environment. On a station without a key, the annotation panel guides the operator through creating a Nomadic account
-and pasting an API key. The annotator checks the key with Nomadic before saving it, and the panel then shows the
-connected account. An accepted key is saved as `station_key.json` in the state directory, readable only by the
-annotator, and is used after restarts.
+On a station without a Nomadic API key, the annotation panel guides the operator through creating an account and
+pasting a key. The annotator checks the key with Nomadic and saves it in the state directory as `station_key.json`.
 
-The page can only connect a station that has no key. To disconnect a station or change its key, delete
-`station_key.json` from the state directory and restart the annotator; the panel then offers the connection steps
-again. Saved annotations are kept. Anyone who can open the episode page can connect an unconnected station, so connect
-it before giving others access to the page where that is not acceptable.
+To disconnect the station or use another key, delete `station_key.json` and restart the annotator. Saved annotations
+are kept.
 
 For another deployment, copy `docker-compose.nomadic.yml` and adjust its mounts. The service's own `docker-compose.yml`
 runs it standalone against `DATA_ROOT`.
@@ -125,7 +120,7 @@ Nomadic-compatible messages. The contract-based ROS conversion supports the FR3 
 
 ### Configuration
 
-The reference Docker setup needs no new values; the API key is connected from the episode page. Keep the state
+The reference Docker setup works with the defaults below. Keep the state
 directory across container replacement to retain saved results and prevent duplicate submissions. To change a setting
 not referenced in `docker-compose.nomadic.yml`, add it to the service's `environment` there.
 
@@ -171,8 +166,7 @@ are left empty rather than inferred from descriptions.
 The state directory (`/workspace/data/nomadic_annotations`, mounted from `${DATA_ROOT}/nomadic_annotations`) holds:
 
 - `jobs.sqlite3`: every annotation job and its results. Back it up with the directory; do not edit it.
-- `station_key.json`: the API key connected from the episode page, if any. Readable only by the annotator. Delete it
-  and restart the annotator to disconnect the station.
+- `station_key.json`: the API key connected from the episode page, if any. Readable only by the annotator.
 - `prepared/`: the temporary H.264 copy of a recording while it is uploaded. Deleted when the job ends.
 - `worker.lock`: ensures that only one annotator process uses the directory.
 
