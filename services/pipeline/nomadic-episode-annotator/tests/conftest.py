@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 import requests
-from pydantic import SecretStr
 
 from configs.annotator import AnnotationConfig
+from jobs import station_key
 
 
 @pytest.fixture(autouse=True)
@@ -18,10 +18,16 @@ def no_live_requests(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def config(tmp_path: Path) -> AnnotationConfig:
+def api_key() -> str:
+    return "test-key-never-send"
+
+
+@pytest.fixture
+def config(tmp_path: Path, api_key: str) -> AnnotationConfig:
+    """A station an operator has already connected from the episode page."""
+    station_key.save(tmp_path / "annotations", api_key, "operator@lab.example")
     return AnnotationConfig(
         enabled=True,
-        api_key=SecretStr("test-key-never-send"),
         state_path=tmp_path / "annotations",
         processed_episodes_path=tmp_path / "processed",
         spec_path=tmp_path / "spec.json",

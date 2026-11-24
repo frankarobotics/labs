@@ -3,17 +3,19 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, SecretStr
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class AnnotationConfig(BaseSettings):
-    """Load optional integration settings from NOMADIC_* environment variables."""
+    """Load optional integration settings from NOMADIC_* environment variables.
+
+    The station's API key is not a setting: an operator connects it from the episode page.
+    """
 
     model_config = SettingsConfigDict(env_prefix="NOMADIC_", env_ignore_empty=True, extra="ignore")
 
     enabled: bool = False
-    api_key: SecretStr = SecretStr("")
     base_url: str = "https://api-prod.nomadicml.com"
     dashboard_url: str = "https://app.nomadicml.com"
     folder: str = "Franka LABS"
@@ -28,5 +30,5 @@ class AnnotationConfig(BaseSettings):
 
 @lru_cache
 def get_annotation_config() -> AnnotationConfig:
-    """Read configuration once; credentials never enter API response models."""
+    """Read configuration once."""
     return AnnotationConfig()

@@ -20,9 +20,14 @@ const ACTIVE_STATES = new Set(['queued', 'preparing', 'uploading', 'ingesting', 
 // Which account receives this station's uploads
 function Connected({ account }: { account: StationAccount }) {
   return (
-    <p className='text text-positive-600 flex items-center gap-1.5'>
-      <CircleCheck aria-hidden className='h-4 w-4' /> Connected to Nomadic as {account.email ?? 'your account'}
-    </p>
+    <div>
+      <p className='text text-positive-600 flex items-center gap-1.5'>
+        <CircleCheck aria-hidden className='h-4 w-4' /> Connected to Nomadic as {account.email ?? 'your account'}
+      </p>
+      <p className='text text-adriatic-500 text-xs'>
+        Uses the key file saved on this station. An administrator can remove the key file to disconnect.
+      </p>
+    </div>
   )
 }
 

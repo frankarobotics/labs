@@ -31,7 +31,7 @@ Read this before enabling the service, and confirm the decision with whoever own
     task name, description, language instructions and task metadata);
   - the episode's task description from `episode_metadata.json`, the episode id and the SHA-256 of the processed file.
 - **Where it goes:** the Nomadic API at `NOMADIC_BASE_URL` (default `https://api-prod.nomadicml.com`), into the
-  `NOMADIC_FOLDER` folder (default `Franka LABS`) of the account that owns `NOMADIC_API_KEY`. Retention and deletion
+  `NOMADIC_FOLDER` folder (default `Franka LABS`) of the Nomadic account the station is connected to. Retention and deletion
   follow that account's terms with Nomadic, not LABS.
 - **When:** only when an operator selects **Auto Annotate with Nomadic** for one saved episode. Nothing is sent in the
   background, and uploads or analyses with an uncertain outcome are never retried automatically. Continuing a job from
@@ -48,7 +48,7 @@ Each station uses one Nomadic account, through its API key.
 1. On a station without a key, the annotation panel links to a Nomadic sign-up page made for LABS
    (`https://app.nomadicml.com/signup?partner=franka-labs`). An existing Nomadic account works too.
 2. Verify the account's email address.
-3. Generate an API key under **Profile → API keys** and paste it into the panel, or set `NOMADIC_API_KEY`.
+3. Generate an API key under **Profile → API keys** and paste it into the panel.
 
 Annotation is paid from the Nomadic account's credit. For current rates, the balance and buying credit, see **Profile →
 Billing** in Nomadic. When the credit runs out, the panel says so and links to that page; the run then continues from
@@ -61,7 +61,7 @@ For the FR3 Duo example station:
 1. Build the image from the repository root: `task build SERVICE=nomadic-episode-annotator`. `BUILD_TARGET` selects
    another target than `dev`. Tilt builds it itself.
 2. In `deployments/fr3_duo_example/.env`, which is gitignored, select the override (see
-   [Optional Services](../../../deployments/README.md#optional-services)) and, optionally, set `NOMADIC_API_KEY`:
+   [Optional Services](../../../deployments/README.md#optional-services)):
 
    ```sh
    COMPOSE_FILE=docker-compose.yml:docker-compose.nomadic.yml
@@ -78,13 +78,16 @@ keeps the saved results in `nomadic_annotations/`.
 
 ### Connect from the episode page
 
-Without `NOMADIC_API_KEY`, the annotation panel guides the operator through creating a Nomadic account and pasting an
-API key. The annotator checks the key with Nomadic before saving it and reports the connected account. An accepted key
-is saved as `station_key.json` in the state directory, readable only by the annotator, and is used after restarts.
+The episode page is the only way to give a station its Nomadic API key; the annotator does not read a key from the
+environment. On a station without a key, the annotation panel guides the operator through creating a Nomadic account
+and pasting an API key. The annotator checks the key with Nomadic before saving it, and the panel then shows the
+connected account. An accepted key is saved as `station_key.json` in the state directory, readable only by the
+annotator, and is used after restarts.
 
-The page can only connect a station that has no key. To change or remove a connected key, set `NOMADIC_API_KEY`, which
-takes precedence, or delete `station_key.json` and restart the annotator. Anyone who can open the episode page can
-connect an unconnected station, so set `NOMADIC_API_KEY` where that is not acceptable.
+The page can only connect a station that has no key. To disconnect a station or change its key, delete
+`station_key.json` from the state directory and restart the annotator; the panel then offers the connection steps
+again. Saved annotations are kept. Anyone who can open the episode page can connect an unconnected station, so connect
+it before giving others access to the page where that is not acceptable.
 
 For another deployment, copy `docker-compose.nomadic.yml` and adjust its mounts. The service's own `docker-compose.yml`
 runs it standalone against `DATA_ROOT`.
@@ -122,14 +125,13 @@ Nomadic-compatible messages. The contract-based ROS conversion supports the FR3 
 
 ### Configuration
 
-For the reference Docker setup, only the API key requires a new value, set here or from the episode page. Keep the state
+The reference Docker setup needs no new values; the API key is connected from the episode page. Keep the state
 directory across container replacement to retain saved results and prevent duplicate submissions. To change a setting
 not referenced in `docker-compose.nomadic.yml`, add it to the service's `environment` there.
 
 | Variable                          | Default                               | When to override                                               |
 | --------------------------------- | ------------------------------------- | -------------------------------------------------------------- |
 | `NOMADIC_ENABLED`                 | `true` in compose; otherwise `false`  | Set `false` to turn annotations off but keep the service.      |
-| `NOMADIC_API_KEY`                 | Unset                                 | Nomadic account credential; otherwise connect from the UI.     |
 | `NOMADIC_POLICY_CONTRACT_PATH`    | Unset; set by the example override    | Existing LABS reference I/O contract.                          |
 | `NOMADIC_SPEC_PATH`               | Unset                                 | Spec for an already compatible recording.                      |
 | `NOMADIC_FOLDER`                  | `Franka LABS`                         | Choose the destination folder in Nomadic.                      |
@@ -169,7 +171,8 @@ are left empty rather than inferred from descriptions.
 The state directory (`/workspace/data/nomadic_annotations`, mounted from `${DATA_ROOT}/nomadic_annotations`) holds:
 
 - `jobs.sqlite3`: every annotation job and its results. Back it up with the directory; do not edit it.
-- `station_key.json`: the API key connected from the episode page, if any. Readable only by the annotator.
+- `station_key.json`: the API key connected from the episode page, if any. Readable only by the annotator. Delete it
+  and restart the annotator to disconnect the station.
 - `prepared/`: the temporary H.264 copy of a recording while it is uploaded. Deleted when the job ends.
 - `worker.lock`: ensures that only one annotator process uses the directory.
 

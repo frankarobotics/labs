@@ -20,13 +20,9 @@ POLL_SECONDS = 10
 class NomadicGateway:
     """Own one SDK session for the lifetime of a background job."""
 
-    def __init__(self, config: AnnotationConfig) -> None:
-        """Open an SDK session and reject SDKs without robotics indexing."""
-        self.client = nomadic.NomadicAI(
-            api_key=config.api_key.get_secret_value(),
-            base_url=config.base_url,
-            timeout=60,
-        )
+    def __init__(self, config: AnnotationConfig, api_key: str) -> None:
+        """Open an SDK session with the station's key and reject SDKs without robotics indexing."""
+        self.client = nomadic.NomadicAI(api_key=api_key, base_url=config.base_url, timeout=60)
         self.config = config
         try:
             # An empty input validates the public mode without submitting work.

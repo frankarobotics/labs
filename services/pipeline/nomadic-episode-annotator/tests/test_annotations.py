@@ -29,6 +29,7 @@ from adapters.nomadic_gateway import NomadicGateway, annotation_events, primary_
 from configs.annotator import AnnotationConfig, get_annotation_config
 from dependencies import get_annotation_service
 from handlers.annotations import router
+from jobs import station_key
 from jobs.episodes import recording_path
 from jobs.models import AnnotationEvent, AnnotationJob
 from jobs.ports import IndexResult, RemoteFailedError
@@ -326,7 +327,7 @@ class FakeGateway:
     finish = threading.Event()
     calls: ClassVar[list[str]] = []
 
-    def __init__(self, config: AnnotationConfig) -> None:
+    def __init__(self, config: AnnotationConfig, api_key: str) -> None:
         pass
 
     def upload(self, path: str) -> str:
@@ -374,7 +375,7 @@ def wait_for_job(service: AnnotationService, episode: UUID, state: str) -> Annot
     pytest.fail(f"Job did not reach {state}")
 
 
-def test_full_job_is_background_deduplicated_persisted_and_downloadable(config: AnnotationConfig) -> None:
+def test_full_job_is_background_deduplicated_persisted_and_downloadable(config: AnnotationConfig, api_key: str) -> None:
     episode, _ = saved_episode(config)
     FakeGateway.calls = []
     FakeGateway.uploaded.clear()
@@ -408,7 +409,7 @@ def test_full_job_is_background_deduplicated_persisted_and_downloadable(config: 
             assert service.store is not None
             restored = JobStore(config.state_path).latest(episode)
             assert restored is not None and restored.events[0].structured_output == expected_fields
-            assert config.api_key.get_secret_value() not in download.text
+            assert api_key not in download.text
             assert "attachment" in download.headers["content-disposition"]
     finally:
         FakeGateway.finish.set()
@@ -483,10 +484,10 @@ def test_worker_ownership_is_exclusive(config: AnnotationConfig) -> None:
         second.close()
 
 
-def test_remote_failure_is_redacted_and_cannot_duplicate_submission(config: AnnotationConfig) -> None:
+def test_remote_failure_is_redacted_and_cannot_duplicate_submission(config: AnnotationConfig, api_key: str) -> None:
     class FailingGateway(FakeGateway):
         def wait_index(self, video_id: str, run_id: str) -> IndexResult:
-            raise RuntimeError(f"Authorization: {config.api_key.get_secret_value()}")
+            raise RuntimeError(f"Authorization: {api_key}")
 
     episode, _ = saved_episode(config)
     FakeGateway.finish.set()
@@ -495,7 +496,7 @@ def test_remote_failure_is_redacted_and_cannot_duplicate_submission(config: Anno
         service.submit(episode)
         interrupted = wait_for_job(service, episode, "interrupted")
         assert interrupted.video_id == "main-view" and interrupted.ingest_id == "ingest-1"
-        assert config.api_key.get_secret_value() not in interrupted.model_dump_json()
+        assert api_key not in interrupted.model_dump_json()
         with pytest.raises(AnnotationConflictError):
             service.submit(episode)
     finally:
@@ -548,7 +549,7 @@ def test_av1_whole_stream_is_converted(tmp_path: Path, config: AnnotationConfig)
 
 
 def test_existing_sdk_sends_robotics_mode(config: AnnotationConfig, monkeypatch: pytest.MonkeyPatch) -> None:
-    gateway = NomadicGateway(config)
+    gateway = NomadicGateway(config, "key")
     transport = Mock(
         side_effect=[
             Mock(json=lambda: {"run_id": "batch-1", "results": {}}),
@@ -643,7 +644,7 @@ def sdk_gateway(monkeypatch: pytest.MonkeyPatch, config: AnnotationConfig, **res
         ),
     )
     monkeypatch.setattr(importlib.import_module("nomadic"), "NomadicAI", Mock(return_value=client))
-    return NomadicGateway(config)
+    return NomadicGateway(config, "key")
 
 
 def test_upload_requires_an_ingest_identifier(config: AnnotationConfig, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -745,7 +746,7 @@ def test_incompatible_sdk_fails_before_upload(config: AnnotationConfig, monkeypa
     )
     monkeypatch.setattr(importlib.import_module("nomadic"), "NomadicAI", Mock(return_value=legacy))
     with pytest.raises(ValueError, match="supported Nomadic SDK"):
-        NomadicGateway(config)
+        NomadicGateway(config, "key")
     legacy.upload.assert_not_called()
     legacy.session.close.assert_called_once()
 
@@ -798,6 +799,7 @@ def test_completed_result_survives_deleted_source_and_mapping(config: Annotation
 @pytest.mark.parametrize("phase", ["connecting", "uploading", "ingesting", "indexing", "fetching"])
 def test_failures_are_actionable_and_do_not_leak_credentials(
     config: AnnotationConfig,
+    api_key: str,
     phase: str,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
@@ -806,7 +808,7 @@ def test_failures_are_actionable_and_do_not_leak_credentials(
         pass
 
     def fail(*_args: object, **_kwargs: object) -> None:
-        raise ValueError(f"Authorization: {config.api_key.get_secret_value()}")
+        raise ValueError(f"Authorization: {api_key}")
 
     method = {
         "connecting": "__init__",
@@ -823,8 +825,8 @@ def test_failures_are_actionable_and_do_not_leak_credentials(
     try:
         service.submit(episode)
         job = wait_for_job(service, episode, "failed" if phase == "connecting" else "interrupted")
-        assert config.api_key.get_secret_value() not in job.model_dump_json()
-        assert config.api_key.get_secret_value() not in caplog.text
+        assert api_key not in job.model_dump_json()
+        assert api_key not in caplog.text
         assert any(action in job.message for action in ("Check", "Continue", "Refresh saved result"))
         if phase == "connecting":
             assert not job.remote_started and FakeGateway.calls == []
@@ -1066,7 +1068,7 @@ def test_empty_result_can_be_completed_and_downloaded(config: AnnotationConfig) 
 
 
 def test_storage_failure_is_reported_without_initializing_sdk(config: AnnotationConfig) -> None:
-    config.state_path.write_text("not a directory")
+    (config.state_path / "worker.lock").mkdir()
     with pytest.raises(AnnotationUnavailableError, match="storage is unavailable"):
         AnnotationService(config, FakeGateway).start()
 
@@ -1080,7 +1082,7 @@ def test_status_never_starts_the_worker(config: AnnotationConfig) -> None:
         response = client.get(f"/api/v1/episodes/{episode}/annotations")
     assert response.status_code == 503
     assert "not running" in response.json()["detail"]
-    assert not config.state_path.exists()
+    assert [path.name for path in config.state_path.iterdir()] == [station_key.FILE_NAME]
 
 
 @pytest.mark.parametrize("request_work", [AnnotationService.submit, AnnotationService.refresh])
@@ -1090,7 +1092,7 @@ def test_work_requests_never_start_the_worker(
     episode, _ = saved_episode(config)
     with pytest.raises(AnnotationUnavailableError, match="not running"):
         request_work(AnnotationService(config, FakeGateway), episode)
-    assert not config.state_path.exists()
+    assert [path.name for path in config.state_path.iterdir()] == [station_key.FILE_NAME]
 
 
 def test_workbench_link_preserves_recording_and_custom_dashboard() -> None:
@@ -1106,7 +1108,7 @@ def test_workbench_link_preserves_recording_and_custom_dashboard() -> None:
 def test_unsafe_dashboard_addresses_disable_submission(config: AnnotationConfig, url: str) -> None:
     config.dashboard_url = url
     service = AnnotationService(config, FakeGateway)
-    assert service.unavailable_reason() is not None
+    assert "dashboard address" in (service.unavailable_reason() or "")
 
 
 def test_preparation_refuses_to_replace_its_source(config: AnnotationConfig) -> None:

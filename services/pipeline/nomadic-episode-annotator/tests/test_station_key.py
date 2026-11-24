@@ -11,7 +11,6 @@ import requests
 import uuid7
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from pydantic import SecretStr
 
 from configs.annotator import AnnotationConfig
 from dependencies import get_annotation_service
@@ -77,12 +76,13 @@ def test_restart_reuses_the_saved_key(config: AnnotationConfig, services: list[A
     first = AnnotationService(config, Mock(), verifier(AccountCheck(email="operator@lab.example")))
     first.connect(KEY)
     first.close()
-    restarted = AnnotationService(config.model_copy(update={"api_key": SecretStr("")}), Mock())
+    gateway_factory = Mock()
+    restarted = AnnotationService(config, gateway_factory)
     services.append(restarted)
     restarted.start()
-    assert restarted.config.api_key.get_secret_value() == KEY
-    account = restarted.status(uuid7.create()).account
-    assert account is not None and account.email == "operator@lab.example"
+    status = restarted.status(uuid7.create())
+    assert status.setup is None and status.account is not None and status.account.email == "operator@lab.example"
+    assert restarted.store is not None
 
 
 def test_rejected_key_is_not_saved(config: AnnotationConfig) -> None:
@@ -90,7 +90,7 @@ def test_rejected_key_is_not_saved(config: AnnotationConfig) -> None:
     with pytest.raises(ValueError, match="did not accept this API key"):
         service.connect(KEY)
     assert not (config.state_path / "station_key.json").exists()
-    assert not config.api_key.get_secret_value()
+    assert service.status(uuid7.create()).setup is not None
 
 
 @pytest.mark.parametrize("pasted", [f"{KEY}\u200b", f"{KEY}…", f"{KEY[:6]} {KEY[6:]}"])
@@ -118,18 +118,29 @@ def test_key_is_forgotten_when_the_worker_cannot_start(
     with pytest.raises(AnnotationUnavailableError):
         service.connect(KEY)
     assert not (config.state_path / "station_key.json").exists()
-    assert not config.api_key.get_secret_value() and service.account is None
+    assert service.status(uuid7.create()).setup is not None and service.account is None
     monkeypatch.undo()
     assert service.connect(KEY).email == "operator@lab.example"
 
 
-def test_connected_station_keeps_its_key(config: AnnotationConfig) -> None:
-    configured = config.model_copy(update={"api_key": SecretStr("administrator-key")})
+def test_connected_station_keeps_its_key(config: AnnotationConfig, services: list[AnnotationService]) -> None:
+    first = AnnotationService(config, Mock(), verifier(AccountCheck(email="operator@lab.example")))
+    services.append(first)
+    first.connect(KEY)
+    saved = (config.state_path / "station_key.json").read_text()
     check = verifier(AccountCheck(email="other@lab.example"))
-    with pytest.raises(AnnotationConflictError, match="already connected"):
-        AnnotationService(configured, Mock(), check).connect(KEY)
+    for service in (first, AnnotationService(config, Mock(), check)):
+        with pytest.raises(AnnotationConflictError, match="already connected"):
+            service.connect("another-key")
     check.assert_not_called()
-    assert configured.api_key.get_secret_value() == "administrator-key"
+    assert (config.state_path / "station_key.json").read_text() == saved
+
+
+def test_a_key_in_the_environment_is_not_used(config: AnnotationConfig, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("NOMADIC_API_KEY", KEY)
+    station = AnnotationConfig(enabled=True, state_path=config.state_path, processed_episodes_path=config.state_path)
+    status = AnnotationService(station, Mock()).status(uuid7.create())
+    assert not status.can_submit and status.setup is not None
 
 
 def test_connect_endpoint_maps_outcomes_without_echoing_the_key(

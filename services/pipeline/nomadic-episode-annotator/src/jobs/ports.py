@@ -81,5 +81,5 @@ class AnnotationGateway(Protocol):
         ...
 
 
-GatewayFactory = Callable[[AnnotationConfig], AnnotationGateway]
+GatewayFactory = Callable[[AnnotationConfig, str], AnnotationGateway]
 KeyVerifier = Callable[[AnnotationConfig, str], AccountCheck]
