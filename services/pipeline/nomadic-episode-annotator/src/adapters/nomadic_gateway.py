@@ -1,0 +1,218 @@
+"""Nomadic SDK operations and annotation response normalization."""
+
+import math
+import re
+import time
+from http import HTTPStatus
+from typing import Any
+from uuid import NAMESPACE_URL, uuid5
+
+import nomadic  # type: ignore[import-untyped]
+
+from configs.annotator import AnnotationConfig
+from jobs.models import AnnotationEvent
+from jobs.ports import AccountCheck, BillingDeclinedError, IndexResult, InvalidApiKeyError, RemoteFailedError
+
+# Seconds between checks on a started indexing run.
+POLL_SECONDS = 10
+
+
+class NomadicGateway:
+    """Own one SDK session for the lifetime of a background job."""
+
+    def __init__(self, config: AnnotationConfig, api_key: str) -> None:
+        """Open an SDK session with the station's key and reject SDKs without robotics indexing."""
+        self.client = nomadic.NomadicAI(api_key=api_key, base_url=config.base_url, timeout=60)
+        self.config = config
+        try:
+            # An empty input validates the public mode without submitting work.
+            self.client.index([], mode="robotics", timeout=1)
+        except Exception as exc:
+            self.client.session.close()
+            raise ValueError("Install the supported Nomadic SDK with robotics indexing support.") from exc
+
+    def upload(self, path: str) -> str:
+        """Return the ingest identifier before waiting for MCAP processing."""
+        try:
+            response = dict(
+                self.client.upload(path, folder=self.config.folder, wait_for_uploaded=False, index_data=False)
+            )
+        except nomadic.APIError as exc:
+            raise billing_declined(exc) or exc from None
+        ingest_id = response.get("mcap_ingest_id")
+        if not ingest_id:
+            raise ValueError("The SDK did not return an MCAP ingest identifier.")
+        return str(ingest_id)
+
+    def ingest(self, ingest_id: str) -> str:
+        """Wait for MCAP ingestion to complete and resolve its primary view."""
+        return primary_video(
+            dict(self.client.video.wait_for_mcap_ingest(ingest_id, timeout=self.config.timeout_seconds))
+        )
+
+    def start_index(self, video_id: str) -> IndexResult:
+        """Start robotics indexing for the primary camera view and return its run before it finishes.
+
+        The SDK waits for indexing to finish. A short wait makes it return the run reference instead, which the job
+        saves, so a restarted station follows the same run rather than starting and paying for another.
+        """
+        try:
+            results = self.client.index([video_id], mode="robotics", timeout=1, poll_interval=1)
+        except nomadic.APIError as exc:
+            raise billing_declined(exc) or exc from None
+        result = dict(results[video_id])
+        if result.get("status") == "failed" and result.get("error_code") != "timeout":
+            raise RemoteFailedError("Nomadic could not start the annotation.")
+        return IndexResult(
+            completed=result.get("status") == "completed",
+            batch_id=result.get("batch_id"),
+            run_id=result.get("run_id"),
+            analysis_id=result.get("analysis_id"),
+            video_id=result.get("index_video_id"),
+            has_warnings=bool(result.get("warnings")),
+        )
+
+    def wait_index(self, video_id: str, run_id: str) -> IndexResult:
+        """Follow a started run until its analysis completes or fails, or the wait limit passes."""
+        deadline = time.monotonic() + self.config.timeout_seconds
+        while True:
+            batch = dict(self.client.get_batch_analysis(run_id))
+            row = next((row for row in batch.get("results", []) if row.get("video_id") == video_id), None)
+            if row is None:
+                raise RemoteFailedError("The recording is not part of the Nomadic annotation run.")
+            analysis_id = row.get("analysis_id")
+            if analysis_id:
+                payload = dict(self.client.video.get_video_analysis(video_id, analysis_id))
+                analysis = payload.get("analysis") or payload
+                status = str(analysis.get("status", "")).lower()
+                if status in {"completed", "complete"}:
+                    stages = analysis.get("indexing_status") or {}
+                    return IndexResult(
+                        completed=True,
+                        batch_id=run_id,
+                        run_id=run_id,
+                        analysis_id=analysis_id,
+                        has_warnings=any(
+                            isinstance(stage, dict) and stage.get("status") == "warning" for stage in stages.values()
+                        ),
+                    )
+                if status == "failed":
+                    raise RemoteFailedError("Nomadic could not annotate the recording.")
+            elif str(row.get("status", "")).lower() in {"failed", "cancelled"}:
+                raise RemoteFailedError("Nomadic could not annotate the recording.")
+            if time.monotonic() >= deadline:
+                return IndexResult(completed=False, run_id=run_id, analysis_id=analysis_id)
+            time.sleep(POLL_SECONDS)
+
+    def analysis_id(self, batch_id: str, video_id: str) -> str | None:
+        """Resolve a saved analysis pointer without creating another indexing job."""
+        batch = dict(self.client.get_batch_analysis(batch_id))
+        return next(
+            (row.get("analysis_id") for row in batch.get("results", []) if row.get("video_id") == video_id), None
+        )
+
+    def events(self, video_id: str, analysis_id: str) -> list[AnnotationEvent]:
+        """Retrieve original events to preserve fractional times and structured fields."""
+        return annotation_events(dict(self.client.video.get_video_analysis(video_id, analysis_id)), analysis_id)
+
+    def close(self) -> None:
+        """Release the SDK's HTTP connection pool."""
+        self.client.session.close()
+
+
+def billing_declined(exc: Exception) -> BillingDeclinedError | None:
+    """Recognize Nomadic's 402 answers, which describe the account's billing state rather than the request."""
+    if getattr(exc, "status_code", None) != HTTPStatus.PAYMENT_REQUIRED:
+        return None
+    message = str(getattr(exc, "message", "") or "")
+    if "upload" in message.lower():
+        return BillingDeclinedError("uploads_not_enabled")
+    amounts = re.search(r"Available (\d+(?:\.\d+)?); required (\d+(?:\.\d+)?)", message)
+    if amounts:
+        return BillingDeclinedError("out_of_credits", float(amounts[1]), float(amounts[2]))
+    return BillingDeclinedError("out_of_credits")
+
+
+def verify_api_key(config: AnnotationConfig, api_key: str) -> AccountCheck:
+    """Check a key with Nomadic without uploading anything, and report the account it belongs to."""
+    client = nomadic.NomadicAI(api_key=api_key, base_url=config.base_url, timeout=15)
+    try:
+        identity = dict(client.verify_auth())
+    except nomadic.AuthenticationError as exc:
+        raise InvalidApiKeyError("Nomadic did not accept this API key.") from exc
+    finally:
+        client.session.close()
+    return AccountCheck(email=identity.get("email"))
+
+
+def primary_video(payload: dict[str, Any]) -> str:
+    """Resolve the declared primary view, accepting a sole video for single-view recordings."""
+    if payload.get("status") == "failed":
+        raise RemoteFailedError("Nomadic could not process the recording.")
+    if payload.get("status") != "completed":
+        raise ValueError("Nomadic did not ingest the complete recording.")
+    primary = payload.get("primary_view_id") or (payload.get("videos_by_role") or {}).get("front")
+    if not primary:
+        views = payload.get("views") or {}
+        primary = views.get("front") if isinstance(views, dict) else None
+    if not primary:
+        videos = payload.get("video_ids") or [row["video_id"] for row in payload.get("derived_videos", [])]
+        if len(videos) == 1:
+            primary = videos[0]
+    if not isinstance(primary, str) or not primary:
+        raise ValueError("Nomadic did not identify a primary camera view.")
+    return primary
+
+
+def _seconds(value: object) -> float:
+    text = str(value).removeprefix("t=")
+    total = 0.0
+    for component in text.split(":"):
+        total = total * 60 + float(component)
+    if not math.isfinite(total) or total < 0:
+        raise ValueError("Invalid event timestamp.")
+    return total
+
+
+def annotation_events(payload: dict[str, Any], analysis_id: str) -> list[AnnotationEvent]:
+    """Normalize action windows while preserving timestamp precision and structured fields."""
+    analysis = payload.get("analysis") or payload
+    if str(analysis.get("status", "")).lower() not in {"completed", "complete"}:
+        raise ValueError("The saved Nomadic analysis is not complete.")
+    events = analysis.get("events") or (analysis.get("visual_analysis") or {}).get("events") or []
+    if not events:
+        # Some indexing responses expose segments under indexing_caption instead of events.
+        events = (analysis.get("indexing_caption") or {}).get("segments") or []
+    normalized = []
+    for event in events:
+        data = event.get("data") or {}
+        fields = event.get("structured_output") or data.get("structured_output") or event.get("facets") or {}
+        start = _seconds(event.get("t_start", event.get("start_time", event.get("time"))))
+        end = _seconds(event.get("t_end", event.get("end_time")))
+        if end <= start:
+            raise ValueError("Nomadic returned an invalid action window.")
+        description = str(event.get("description") or event.get("label") or "")
+        identity = (
+            event.get("event_id")
+            or event.get("id")
+            or str(uuid5(NAMESPACE_URL, f"{analysis_id}:{start}:{end}:{description}"))
+        )
+        classes = fields.get("action_classes") or []
+        category = classes[0] if classes else event.get("category") or event.get("type")
+        hand = fields.get("acting_hand") or event.get("acting_hand")
+        normalized.append(
+            AnnotationEvent(
+                event_id=identity,
+                start_seconds=start,
+                end_seconds=end,
+                description=description,
+                category=category,
+                acting_hand=hand if hand in {"left", "right", "both"} else None,
+                objects=fields.get("objects_interacted_with") or [],
+                action_classes=classes,
+                gripper_transitions=fields.get("gripper_transitions") or [],
+                object_interactions=fields.get("object_interactions") or event.get("object_interactions") or [],
+                structured_output=fields,
+            )
+        )
+    return sorted(normalized, key=lambda event: event.start_seconds)

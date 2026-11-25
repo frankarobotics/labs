@@ -16,10 +16,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
-import uuid7  # type: ignore[import-untyped]
 from loguru import logger
-
-from models.episode import EpisodeLabel, EpisodeMetadata, EpisodeProcessed, EpisodeStatus
+from pipeline_episodes import (
+    EPISODE_METADATA_FILE,
+    EpisodeLabel,
+    EpisodeMetadata,
+    EpisodeProcessed,
+    EpisodeStatus,
+    episode_directory,
+)
 
 
 @dataclass
@@ -45,15 +50,7 @@ class EpisodeRepo:
 
     def _get_file_path(self, episode_id: UUID) -> Path:
         """Resolve the metadata JSON path from an episode_id via its UUIDv7 timestamp."""
-        dt: datetime = uuid7.time(episode_id)
-        return (
-            self.base_path
-            / dt.strftime("%Y")
-            / dt.strftime("%m")
-            / dt.strftime("%d")
-            / str(episode_id)
-            / "episode_metadata.json"
-        )
+        return episode_directory(self.base_path, episode_id) / EPISODE_METADATA_FILE
 
     def get_by_id(self, episode_id: UUID) -> EpisodeMetadata | None:
         """Read episode metadata by ID (O(1) path lookup via UUIDv7 timestamp)."""
@@ -74,7 +71,7 @@ class EpisodeRepo:
 
         episodes: list[EpisodeMetadata] = []
         with self._lock:
-            for meta_file in sorted(self.base_path.rglob("episode_metadata.json"), reverse=True):
+            for meta_file in sorted(self.base_path.rglob(EPISODE_METADATA_FILE), reverse=True):
                 try:
                     episodes.append(EpisodeMetadata(**json.loads(meta_file.read_text())))
                 except Exception as e:

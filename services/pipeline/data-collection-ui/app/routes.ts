@@ -5,6 +5,7 @@ export default [
   route('/collect', 'routes/data-collection/index.tsx'),
   route('/episodes', 'routes/episodes/index.tsx', [route(':episode_id', 'routes/episodes/episode/index.tsx')]),
   ...prefix('/api', [
+    route('annotations', 'routes/api/annotations.ts'),
     route('episode', 'routes/api/episode.ts'),
     route('teleop', 'routes/api/teleop.ts'),
     route('follower-reset', 'routes/api/follower-reset.ts'),

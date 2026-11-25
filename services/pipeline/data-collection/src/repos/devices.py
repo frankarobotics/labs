@@ -8,8 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from loguru import logger
-
-from models.device import DeviceStatus, DeviceType
+from pipeline_episodes import DeviceStatus, DeviceType
 
 
 @dataclass

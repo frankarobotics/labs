@@ -27,11 +27,15 @@ has_nvidia_runtime = str(local(
     echo_off=True,
 )).strip() == "yes"
 
+# Same selection as plain `docker compose`
+compose_files = (os.getenv("COMPOSE_FILE") or "docker-compose.yml").split(":")
+nomadic_selected = "docker-compose.nomadic.yml" in [os.path.basename(f) for f in compose_files]
+
 if has_nvidia_runtime:
-    docker_compose("docker-compose.yml", profiles=["gpu"])
+    docker_compose(compose_files, profiles=["gpu"])
 else:
     print("NVIDIA runtime not detected - ZED camera service disabled.")
-    docker_compose("docker-compose.yml")
+    docker_compose(compose_files)
 
 git_commit = str(local("git -C ../../ rev-parse HEAD")).strip()
 common_build_args = {
@@ -203,11 +207,19 @@ docker_build(
     ],
 )
 
+packages_context_custom_build(
+    ref="registry.localhost/labs/nomadic-episode-annotator:latest",
+    context="../../services/pipeline/nomadic-episode-annotator",
+    dockerfile="../../services/pipeline/nomadic-episode-annotator/nomadic-episode-annotator.dockerfile",
+) if nomadic_selected else None
+
 # Resource groups in the Tilt sidebar
 dc_resource("data-collection", labels=["pipeline"])
 dc_resource("data-collection-ui", labels=["pipeline"])
 dc_resource("data-processor", labels=["pipeline"])
 dc_resource("data-recorder", labels=["pipeline"])
+if nomadic_selected:
+    dc_resource("nomadic-episode-annotator", labels=["pipeline"])
 dc_resource("realsense-camera-wrist", labels=["sensors"])
 if has_nvidia_runtime:
     dc_resource("zed-camera-head", labels=["sensors"])

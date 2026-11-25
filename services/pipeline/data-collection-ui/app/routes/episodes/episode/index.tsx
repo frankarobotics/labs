@@ -1,10 +1,12 @@
 import { redirect } from 'react-router'
 
+import { annotationStatus } from '@/api/annotations'
 import usePollLoader from '@/api/polling/usePollLoader'
 import Container from '@/components/Container'
 import Separator from '@/components/Container/Separator'
 import ContainerTitle from '@/components/Container/Title'
 import EpisodeActions from '@/components/EpisodeActions'
+import EpisodeAnnotations from '@/components/EpisodeAnnotations'
 import EpisodeDetails from '@/components/EpisodeDetails'
 import { WebsocketCanvas } from '@/components/WebsocketCanvas/WebsocketCanvas'
 import compareDeviceDirectionNames from '@/utils/compareDeviceDirectionNames'
@@ -17,7 +19,7 @@ import type { Route } from './+types/index'
 
 export async function loader({
   params: { episode_id },
-  context: { DATA_COLLECTION_CLIENT: client, DATA_COLLECTION_URL: url },
+  context: { DATA_COLLECTION_CLIENT: client, DATA_COLLECTION_URL: url, NOMADIC_EPISODE_ANNOTATOR_URL: annotatorUrl },
 }: Route.LoaderArgs) {
   const episode = await unwrapOrThrow(
     client.GET('/api/v1/episodes/{episode_id}', {
@@ -50,6 +52,7 @@ export async function loader({
     .toSorted((a, b) => compareDeviceDirectionNames(a.id, b.id))
 
   return {
+    annotations: annotatorUrl && (await annotationStatus(annotatorUrl, episode_id)),
     episode: {
       id: episode.episode_id,
       dateTimeIso: episode.created_at,
@@ -65,6 +68,7 @@ export default function Episode({
   loaderData: {
     episode: { id, dateTimeIso, duration, type, taskDescription },
     cameras,
+    annotations,
   },
 }: Route.ComponentProps) {
   usePollLoader()
@@ -80,6 +84,12 @@ export default function Episode({
           <WebsocketCanvas key={wsUrl} status={status} name={name} url={wsUrl} />
         ))}
       </div>
+      {annotations?.enabled && (
+        <>
+          <Separator />
+          <EpisodeAnnotations id={id} initialStatus={annotations} />
+        </>
+      )}
       <Separator />
       <ContainerTitle>Actions</ContainerTitle>
       <EpisodeActions id={id} />

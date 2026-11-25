@@ -32,6 +32,8 @@ The following environment variables can be set under the `data-collection-ui` se
 
 - `PORT`: Server listen port (default `4000`)
 - `NODE_ENV`: `development` enables Vite HMR, `production` serves pre-built assets
+- `NOMADIC_EPISODE_ANNOTATOR_PORT`: port of a co-located `nomadic-episode-annotator`; unset hides the episode
+  annotation panel
 
 ### Regenerating API Types
 

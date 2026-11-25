@@ -1,0 +1,28 @@
+# Optional Nomadic annotations for the FR3 Duo example station; see services/pipeline/nomadic-episode-annotator/README.md
+services:
+  nomadic-episode-annotator:
+    image: ${DOCKER_REGISTRY:-registry.localhost}/labs/nomadic-episode-annotator:${DOCKER_TAG:-latest}
+    container_name: nomadic-episode-annotator
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      # Loopback only: the API has no authentication and uploads with the station's Nomadic key
+      NOMADIC_EPISODE_ANNOTATOR_HOST: 127.0.0.1
+      NOMADIC_EPISODE_ANNOTATOR_PORT: ${NOMADIC_EPISODE_ANNOTATOR_PORT:-3050}
+      NOMADIC_ENABLED: ${NOMADIC_ENABLED:-true}
+      NOMADIC_POLICY_CONTRACT_PATH: /workspace/nomadic-config/${NOMADIC_POLICY_CONTRACT_FILE:-config_contract_gr00t.yml}
+      NOMADIC_SPEC_PATH: ${NOMADIC_SPEC_FILE:+/workspace/nomadic-config/}${NOMADIC_SPEC_FILE:-}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${DATA_ROOT:-../../data}/processed_episodes:/workspace/data/processed_episodes:ro
+      - ${DATA_ROOT:-../../data}/nomadic_annotations:/workspace/data/nomadic_annotations
+      - type: bind
+        source: ${NOMADIC_CONFIG_DIR:-.}
+        target: /workspace/nomadic-config
+        read_only: true
+        bind:
+          create_host_path: false
+
+  data-collection-ui:
+    environment:
+      NOMADIC_EPISODE_ANNOTATOR_PORT: ${NOMADIC_EPISODE_ANNOTATOR_PORT:-3050}

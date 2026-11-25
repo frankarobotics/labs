@@ -2,9 +2,9 @@ from typing import Any
 from uuid import UUID
 
 from loguru import logger
+from pipeline_episodes import EpisodeLabel, EpisodeStatus
 from statemachine import Event, State, StateMachine
 
-from models.episode import EpisodeLabel, EpisodeStatus
 from repos.data_recorder import DataRecorderRepo
 from services.episode import EpisodeService
 

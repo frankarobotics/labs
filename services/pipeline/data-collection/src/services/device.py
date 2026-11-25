@@ -1,5 +1,7 @@
+from pipeline_episodes import DeviceType
+
 from configs.data_collection import DataCollectionConfig
-from models.device import DeviceResponse, DeviceType
+from models.device import DeviceResponse
 from repos.devices import DeviceRecord, DeviceRepo
 
 

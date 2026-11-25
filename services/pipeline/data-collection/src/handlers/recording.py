@@ -7,9 +7,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
+from pipeline_episodes import EpisodeLabel
 
 from dependencies import get_recording_service
-from models.episode import EpisodeLabel
 from models.recording import (
     DiscardRecordingResponse,
     SaveRecordingResponse,
