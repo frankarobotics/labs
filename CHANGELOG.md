@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.4.0] - UNRELEASED
+## [0.4.0] - 2026-11-25
 
 - Episode metadata models, device enums and the on-disk episode layout moved from data-collection into a shared
   `pipeline-episodes` package, so other pipeline services can read episodes without depending on data-collection.
